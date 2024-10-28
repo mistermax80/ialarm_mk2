@@ -12,7 +12,7 @@
   "documentation": "https://www.home-assistant.io/integrations/ialarm_mk2",
   "homekit": {},
   "iot_class": "cloud_polling",
-  "requirements": [],
+  "requirements": ["lxml"],
   "ssdp": [],
   "zeroconf": []
 }

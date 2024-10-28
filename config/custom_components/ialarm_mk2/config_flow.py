@@ -17,7 +17,6 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# TODO adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST, default=ipyialarmmk.iAlarmMkInterface.IALARMMK_P2P_DEFAULT_HOST): str,

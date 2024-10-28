@@ -184,7 +184,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 # Logga il messaggio finale
                 _LOGGER.debug(log_message)
 
-        except ConnectionError as error:
+        except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             self.hub.ialarmmk.ialarmmkClient.logout()
             _LOGGER.debug("*** Logout OK ***")

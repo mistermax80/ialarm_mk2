@@ -19509,3 +19509,6 @@ requirements_test_all.txt
 requirements_test_pre_commit.txt
 requirements_test.txt
 requirements.txt
+config/home-assistant_v2.db-shm
+config/home-assistant_v2.db-wal
+config/home-assistant.log.fault
