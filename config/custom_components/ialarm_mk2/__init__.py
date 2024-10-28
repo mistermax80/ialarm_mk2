@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from asyncio.timeouts import timeout
 from datetime import datetime, timedelta
 import logging
@@ -26,7 +27,7 @@ from .binary_sensor import IAlarmmkSensor
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.ALARM_CONTROL_PANEL]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
@@ -69,6 +70,7 @@ class IAlarmMkHub:
         self.username: str = username
         self.password: str = password
         self.mac: str = None
+        self.state:int = None
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(self.username, self.password, self.host, self.port, None, _LOGGER)
 
     async def get_mac(self) -> str:
@@ -98,14 +100,21 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             _LOGGER,
             name=DOMAIN,
             #update_interval=SCAN_INTERVAL,
-            update_interval=timedelta(seconds=60),
+            update_interval=timedelta(seconds=30),
         )
         self.hub: IAlarmMkHub = hub
         self.hass = hass
+        self.hub.ialarmmk.set_callback(self.callback)
         self.sensors:IAlarmmkSensor = []
+        self._subscription_task = None
 
     async def _async_setup(self):
         _LOGGER.info("Setup iAlarm-MK 2 data updater.")
+
+        # Start the subscription in the background
+        self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
+        _LOGGER.debug("Task created: %s", self._subscription_task)
+
         SENSOR_CONFIG = []
         try:
             self.hub.ialarmmk.ialarmmkClient.login()
@@ -135,6 +144,28 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             iAlarmSensor = IAlarmmkSensor(self, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
             self.sensors.append(iAlarmSensor)
 
+    def callback(self, status: int) -> None:
+        """Handle status updates from iAlarm-MK."""
+        _LOGGER.debug("Received iAlarm-MK status: %s", status)
+        self.hub.state = status
+        # Schedule the update
+        self.hass.async_create_task(self.async_update_data())
+
+    async def async_update_data(self) -> None:
+        """Update the data and notify about the new state."""
+        _LOGGER.debug("Update the data in iAlarm-MK status: %s", self.hub.state)
+        self.async_set_updated_data(self.hub.state)
+
+    def _update_data(self) -> None:
+        """Fetch data from iAlarm-MK via synchronous functions."""
+        try:
+            status: int = self.hub.ialarmmk.get_status()
+            _LOGGER.debug("Updating internal state: %s", status)
+            self.hub.state = status
+        except ConnectionError as e:
+            _LOGGER.error("Error fetching data from iAlarm-MK: %s", e)
+            raise UpdateFailed("Connection error") from e
+
     async def _async_update_data(self) -> None:
         """Fetch data from iAlarm-MK 2."""
         _LOGGER.info("Fetching data.")
@@ -142,6 +173,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         current_time = datetime.now(tz)
         try:
             async with timeout(12):
+                await self.hass.async_add_executor_job(self._update_data)
                 self.hub.ialarmmk.ialarmmkClient.login()
                 _LOGGER.debug("Login OK.")
                 status = self.hub.ialarmmk.ialarmmkClient.GetByWay()
@@ -183,7 +215,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     )
                 # Logga il messaggio finale
                 _LOGGER.debug(log_message)
-
+                await self.async_update_data()
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             self.hub.ialarmmk.ialarmmkClient.logout()
