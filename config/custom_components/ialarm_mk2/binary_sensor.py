@@ -26,8 +26,8 @@ async def async_setup_entry(
     """Set up sensors based on a config entry."""
     _LOGGER.info("Set up sensors based on a config entry.")
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    _LOGGER.debug(coordinator.sensors)
     async_add_entities(coordinator.sensors,True)
+    _LOGGER.debug(coordinator.sensors)
 
 class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     """Representation of a iAlarm Status Sensor."""

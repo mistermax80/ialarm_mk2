@@ -143,7 +143,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         try:
             async with timeout(12):
                 self.hub.ialarmmk.ialarmmkClient.login()
-                _LOGGER.debug("Login OK.")
+                _LOGGER.debug("Login ok.")
                 status = self.hub.ialarmmk.ialarmmkClient.GetByWay()
                 _LOGGER.debug("Retrive last sensors status.")
                 _LOGGER.debug("Status: %s",status)
@@ -187,5 +187,5 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             self.hub.ialarmmk.ialarmmkClient.logout()
-            _LOGGER.debug("*** Logout OK ***")
+            _LOGGER.info("After error, logout ok.")
             raise UpdateFailed(error) from error
