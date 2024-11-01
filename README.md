@@ -1,4 +1,5 @@
-# ialarm_mk2
+# Home Assistant custom integration for iAlarm MK
+
 An advanced custom integration for Home Assistant, designed for the iAlarm MK alarm system.
 
 The goal of this integration is to retrieve as much information as possible from the central server. For example:
