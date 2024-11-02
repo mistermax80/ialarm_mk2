@@ -72,7 +72,10 @@ class iAlarmMkClient:
             self._print("Socket already connected.")
         except OSError as e:
             # Il socket non è connesso, cattura l'errore e restituisce False
-            self._print(f"Socket is not connected, error messagge: {e}.")
+            self._print(f"Socket is not connected, error messagge: {e}. Proceding to close old socket.")
+            self.close_socket()
+            self._print("Re-initialized new socket, creating a new socket.")
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             return False
         return True
 
@@ -794,19 +797,19 @@ class iAlarmMkClient:
     def _xmlread(self, path, key, value):
         try:
             input = value
-            BOL = re.compile("BOL\|([FT])")
-            DTA = re.compile("DTA(,\d+)*\|(\d{4}\.\d{2}.\d{2}.\d{2}.\d{2}.\d{2})")
-            ERR = re.compile("ERR\|(\d{2})")
-            GBA = re.compile("GBA,(\d+)\|([0-9A-F]*)")
-            HMA = re.compile("HMA,(\d+)\|(\d{2}:\d{2})")
-            IPA = re.compile("IPA,(\d+)\|(([0-2]?\d{0,2}\.){3}([0-2]?\d{0,2}))")
-            MAC = re.compile("MAC,(\d+)\|(([0-9A-F]{2}[:-]){5}([0-9A-F]{2}))")
-            NEA = re.compile("NEA,(\d+)\|([0-9A-F]+)")
-            NUM = re.compile("NUM,(\d+),(\d+)\|(\d*)")
-            PWD = re.compile("PWD,(\d+)\|(.*)")
-            S32 = re.compile("S32,(\d+),(\d+)\|(\d*)")
-            STR = re.compile("STR,(\d+)\|(.*)")
-            TYP = re.compile("TYP,(\w+)\|(\d+)")
+            BOL = re.compile(r"BOL\|([FT])")
+            DTA = re.compile(r"DTA(,\d+)*\|(\d{4}\.\d{2}.\d{2}.\d{2}.\d{2}.\d{2})")
+            ERR = re.compile(r"ERR\|(\d{2})")
+            GBA = re.compile(r"GBA,(\d+)\|([0-9A-F]*)")
+            HMA = re.compile(r"HMA,(\d+)\|(\d{2}:\d{2})")
+            IPA = re.compile(r"IPA,(\d+)\|(([0-2]?\d{0,2}\.){3}([0-2]?\d{0,2}))")
+            MAC = re.compile(r"MAC,(\d+)\|(([0-9A-F]{2}[:-]){5}([0-9A-F]{2}))")
+            NEA = re.compile(r"NEA,(\d+)\|([0-9A-F]+)")
+            NUM = re.compile(r"NUM,(\d+),(\d+)\|(\d*)")
+            PWD = re.compile(r"PWD,(\d+)\|(.*)")
+            S32 = re.compile(r"S32,(\d+),(\d+)\|(\d*)")
+            STR = re.compile(r"STR,(\d+)\|(.*)")
+            TYP = re.compile(r"TYP,(\w+)\|(\d+)")
             if BOL.match(input):
                 bol = BOL.search(input).groups()[0]
                 if bol == "T":
@@ -840,7 +843,7 @@ class iAlarmMkClient:
             elif TYP.match(input):
                 value = int(TYP.search(input).groups()[1])
             else:
-                raise ResponseError("Unknown data type %s" % input)
+                raise ResponseError(f"Unknown data type {format(input)}")
             return key, value
         except (ValueError, TypeError):
             return key, value
