@@ -65,6 +65,28 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             iAlarmSensor = IAlarmmkSensor(self, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
             self.sensors.append(iAlarmSensor)
 
+    def callback(self, status: int) -> None:
+        """Handle status updates from iAlarm-MK."""
+        _LOGGER.debug("Received iAlarm-MK status: %s", status)
+        self.hub.state = status
+        # Schedule the update
+        self.hass.async_create_task(self.async_update_data())
+
+    async def async_update_data(self) -> None:
+        """Update the data and notify about the new state."""
+        _LOGGER.debug("Update the data in iAlarm-MK status: %s", self.hub.state)
+        self.async_set_updated_data(self.hub.state)
+
+    def _update_data(self) -> None:
+        """Fetch data from iAlarm-MK via synchronous functions."""
+        try:
+            status: int = self.hub.ialarmmk.get_status()
+            _LOGGER.debug("Updating internal state: %s", status)
+            self.hub.state = status
+        except ConnectionError as e:
+            _LOGGER.error("Error fetching data from iAlarm-MK: %s", e)
+            raise UpdateFailed("Connection error") from e
+
     async def _async_update_data(self) -> None:
         """Fetch data from iAlarm-MK 2."""
         _LOGGER.info("Fetching data.")
@@ -73,6 +95,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         try:
             async with timeout(15):
+                await self.hass.async_add_executor_job(self._update_data)
+                self.hub.ialarmmk.ialarmmkClient.login()
 
                 attempts = 0
                 max_attempts = 3

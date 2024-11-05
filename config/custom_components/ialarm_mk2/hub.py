@@ -18,6 +18,7 @@ class IAlarmMkHub:
         self.username: str = username
         self.password: str = password
         self.mac: str = None
+        self.state:int = None
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(self.username, self.password, self.host, self.port, None, _LOGGER)
 
     async def get_mac(self) -> str:

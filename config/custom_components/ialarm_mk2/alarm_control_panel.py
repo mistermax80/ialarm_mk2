@@ -20,8 +20,9 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import iAlarmMk2Coordinator, libpyialarmmk as ipyialarmmk
+from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
+from .coordinator import iAlarmMk2Coordinator
 
 IALARMMK_TO_HASS = {
     ipyialarmmk.iAlarmMkInterface.ARMED_AWAY: STATE_ALARM_ARMED_AWAY,
