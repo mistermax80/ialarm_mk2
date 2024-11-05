@@ -64,14 +64,14 @@ class iAlarmMkClient:
         self.logout()
 
     def is_socket_connected(self):
-        '''Controlla se il socket è già connesso.'''
+        '''Controlla se il socket è già connesso. Se non è connesso inizializza un nuovo socket.'''
         self._print(f"Socket file descriptor:{self.sock.fileno()}.")
         try:
             # Se il socket è connesso, restituisce l'indirizzo del peer
             self.sock.getpeername()
             self._print("Socket already connected.")
         except OSError as e:
-            # Il socket non è connesso, cattura l'errore e restituisce False
+            # Il socket non è connesso e lo reinizializza, cattura l'errore e restituisce False
             self._print(f"Socket is not connected, error messagge: {e}. Proceding to close old socket.")
             self.close_socket()
             self._print("Re-initialized new socket, creating a new socket.")
@@ -79,20 +79,9 @@ class iAlarmMkClient:
             return False
         return True
 
-    def close_socket(self):
-        """Funzione ausiliaria per chiudere il socket in modo sicuro."""
-        if self.sock:
-            try:
-                self.sock.close()
-            except Exception as e:
-                self._print(f"Error closing socket: {e}")
-            finally:
-                self.sock = None
-
     def login(self):
         self._print("Login method called.")
-
-        # Controllo se il socket è inizializzato e valido
+        '''Controlla se il socket è inizializzato e valido.'''
         if self.sock is None or self.sock.fileno() == -1:
             self._print("Invalid or uninitialized socket, creating a new socket.")
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -149,9 +138,19 @@ class iAlarmMkClient:
                 self.close_socket()
                 raise ClientError("Unexpected error during login")
 
+    def close_socket(self):
+        """Funzione ausiliaria per chiudere il socket in modo sicuro."""
+        if self.sock:
+            try:
+                self.sock.close()
+            except Exception as e:
+                self._print(f"Error closing socket: {e}")
+            finally:
+                self.sock = None
 
     def logout(self):
-        if self.sock is None or self.sock.fileno() == -1:
+        self._print("Logout method called.")
+        if self.sock is None:
             return
 
         self.sock.close()
