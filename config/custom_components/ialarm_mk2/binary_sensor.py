@@ -8,7 +8,6 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -35,6 +34,7 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     def __init__(
         self,
         coordinator: DataUpdateCoordinator,
+        device: DeviceInfo,
         name: str,
         index: int,
         entity_id: str,
@@ -43,12 +43,7 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-
-        self._attr_device_info = DeviceInfo(
-            manufacturer="antifurto 365",
-            name="iAlarm-MK",
-            connections={(dr.CONNECTION_NETWORK_MAC, coordinator.hub.mac)}
-        )
+        self._attr_device_info = device
         self.hass = coordinator.hass
         self._attr_unique_id = unique_id
         self.name = name
