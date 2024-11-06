@@ -63,7 +63,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 _LOGGER.exception("Error in setup entities.")
 
         for sc in SENSOR_CONFIG:
-            iAlarmSensor = IAlarmmkSensor(self, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
+            iAlarmSensor = IAlarmmkSensor(self, self.hub.device_info, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
             self.sensors.append(iAlarmSensor)
 
     def callback(self, status: int) -> None:
