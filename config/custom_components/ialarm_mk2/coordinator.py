@@ -31,6 +31,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=60),
         )
         self.hub: IAlarmMkHub = hub
+        self.hub.ialarmmk.set_callback(self.callback)
         self.hass = hass
         self.sensors:IAlarmmkSensor = []
 
