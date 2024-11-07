@@ -67,7 +67,7 @@ class iAlarmMkInterface:
         self.logger = logger
 
         self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd, self.logger)
-
+        self.status = None
         self.subscribed_task = None
         self.callback = None
         self.hass = hass
@@ -137,11 +137,11 @@ class iAlarmMkInterface:
             self.logger.info("Subscription task cancelled.")
 
     def _get_status(self):
-        self.logger.debug("_get_status")
+        self.logger.debug("Retrieving DevStatus...")
         try:
             self.ialarmmkClient.login()
             self.status = self.ialarmmkClient.GetAlarmStatus().get("DevStatus")
-            self.logger.debug("DevStatus: %s", self.status)
+            self.logger.debug("DevStatus: %s(%s)", self.status_dict.get(self.status),self.status)
             self.ialarmmkClient.logout()
         except Exception:
             self.status = self.UNAVAILABLE
@@ -239,7 +239,6 @@ class iAlarmMkInterface:
         self.ialarmmkClient.logout()
         if network_info is not None:
             mac = network_info.get("Mac", "")
-
         if mac:
             return mac
         raise ConnectionError(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from asyncio.timeouts import timeout
 import logging
 
@@ -26,14 +25,13 @@ PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.ALARM_CONTROL_PANE
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
-    _LOGGER.info("Set up iAlarm-MK Integration 2 from a config entry.")
+    _LOGGER.info("Set up iAlarm-MK 2 Integration from a config entry...")
 
     hub: IAlarmMkHub = IAlarmMkHub(entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
 
     try:
         async with timeout(10):
-            mac: str = await hub.get_mac()
-            _LOGGER.info("MAC: %s", mac)
+            await hub.validate()
     except (TimeoutError, ConnectionError) as ex:
         raise ConfigEntryNotReady from ex
 

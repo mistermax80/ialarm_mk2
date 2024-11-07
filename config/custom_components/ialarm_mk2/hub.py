@@ -1,4 +1,4 @@
-'''Hub per la utilizzo della libreria.'''
+'''Hub per utilizzo liberia.'''
 import logging
 
 from homeassistant.helpers import device_registry as dr
@@ -10,35 +10,38 @@ from . import libpyialarmmk as ipyialarmmk
 _LOGGER = logging.getLogger(__name__)
 
 class IAlarmMkHub:
-    """IAlarmMkHub."""
+    """Gestisce la connessione con iAlarm-MK."""
 
     def __init__(self, host: str, port: int, username: str, password: str) -> None:
-        """Initialize."""
-        _LOGGER.info("Initialize IAlarmMkHub")
+        """Inizializza la connessione con iAlarm-MK."""
+        _LOGGER.info("Initializing iAlarmMkHub")
         self.host: str = host
         self.port: int = port
         self.username: str = username
         self.password: str = password
         self.mac: str = None
-        self.state:int = None
+        self.state: int = None
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(self.username, self.password, self.host, self.port, None, _LOGGER)
         self.device_info = None
 
-    async def get_mac(self) -> str:
-        """Test if we can authenticate with the host."""
-        _LOGGER.debug("IAlarmMkHub.get_mac")
-        if self.mac is None:
-            self.mac = format_mac(self.ialarmmk.get_mac())
-            self.device_info = DeviceInfo(
-                manufacturer="antifurto 365",
-                name="iAlarm-MK",
-                connections={(dr.CONNECTION_NETWORK_MAC, self.mac)}
-            )
-        _LOGGER.debug("MAC: %s", self.mac)
-        return self.mac
-
     async def validate(self) -> bool:
-        """Test if we can authenticate with the host."""
-        _LOGGER.debug("IAlarmMkHub.validate")
-        await self.get_mac()
-        return True
+        """Verifica la connessione e recupera le informazioni sul dispositivo."""
+        _LOGGER.info("Validating connection, getting MAC address...")
+
+        try:
+            # Verifica se l'indirizzo MAC è già stato recuperato
+            if self.mac is None:
+                # Recupera l'indirizzo MAC e imposta le informazioni sul dispositivo
+                self.mac = format_mac(self.ialarmmk.get_mac())
+                _LOGGER.info("MAC address: %s", self.mac)
+
+                # Imposta le informazioni sul dispositivo
+                self.device_info = DeviceInfo(
+                    manufacturer="antifurto 365",
+                    name="iAlarm-MK",
+                    connections={(dr.CONNECTION_NETWORK_MAC, self.mac)}
+                )
+        except Exception as e:
+            _LOGGER.error("Failed to validate connection or get MAC address: %s", e)
+            return False  # Restituisce False in caso di errore
+        return True  # Connessione riuscita
