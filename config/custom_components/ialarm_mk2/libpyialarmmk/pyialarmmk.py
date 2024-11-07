@@ -863,10 +863,9 @@ class iAlarmMkClient:
                     elem = etree.Element(tag)
                     parent.append(elem)
                     iAlarmMkClient._convert_dict_to_xml_recurse(elem, child)
-        else:
-            if dictitem is not None:
-                # None Element should be written without "None" value
-                parent.text = str(dictitem)
+        elif dictitem is not None:
+            # None Element should be written without "None" value
+            parent.text = str(dictitem)
 
     @staticmethod
     def _convert_dict_to_xml(xmldict: dict):
@@ -1028,10 +1027,8 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             if self.transport.is_closing() is False:
                 self.transport.close()
                 self.on_con_lost.set_result(True)
-            pass
         except Exception as e:
             self._print(e)
-            pass
 
     def _keepalive(self):
         mesg = b"%maI"

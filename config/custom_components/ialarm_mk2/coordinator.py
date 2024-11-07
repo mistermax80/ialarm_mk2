@@ -1,5 +1,6 @@
 '''Coordinator.'''
 
+import asyncio
 from asyncio.timeouts import timeout
 from datetime import datetime, timedelta
 import logging
@@ -21,8 +22,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
     def __init__(
         self, hass: HomeAssistant, hub: IAlarmMkHub
     ) -> None:
-        """Initialize global a iAlarm-MK 2 data updater."""
-        _LOGGER.info("Initialize global a iAlarm-MK 2 data updater.")
+        """Initialize global a data updater."""
+        _LOGGER.info("Initialize global a data updater.")
         super().__init__(
             hass,
             _LOGGER,
@@ -31,12 +32,19 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=60),
         )
         self.hub: IAlarmMkHub = hub
+        self._subscription_task = None
         self.hub.ialarmmk.set_callback(self.callback)
-        self.hass = hass
         self.sensors:IAlarmmkSensor = []
 
     async def _async_setup(self):
-        _LOGGER.info("Setup iAlarm-MK 2 data updater.")
+        _LOGGER.info("Setup data updater.")
+
+        # Registrazione listener di spegnimento
+        self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
+        # Start the subscription in the background
+        self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
+        #asyncio.run(self.hub.ialarmmk.subscribe())
+
         SENSOR_CONFIG = []
         try:
             self.hub.ialarmmk.ialarmmkClient.login()
@@ -66,16 +74,29 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             iAlarmSensor = IAlarmmkSensor(self, self.hub.device_info, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
             self.sensors.append(iAlarmSensor)
 
-    def callback(self, status: int) -> None:
+    async def async_shutdown(self, *args):
+        """Gestisci la chiusura delle risorse quando Home Assistant si spegne."""
+        _LOGGER.info("Shutting down iAlarmMk custom component...")
+        self.hub.ialarmmk.ialarmmkClient.cancel_subscription()
+        self.hub.ialarmmk.ialarmmkClient.logout()
+
+    def callback(self, event_data: dict) -> None:
         """Handle status updates from iAlarm-MK."""
-        _LOGGER.debug("Received iAlarm-MK status: %s", status)
-        self.hub.state = status
+        _LOGGER.debug("Received event from server, data: %s", event_data)
+
+        _LOGGER.debug("Old state: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
+        self.hub.state = event_data.get("Status")
+        _LOGGER.debug("New state: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
+
+        # Evento personalizzato con nome "ialarm_mk_event"
+        self.hass.bus.async_fire("ialarm_mk2_event", event_data)
+
         # Schedule the update
         self.hass.async_create_task(self.async_update_data())
 
     async def async_update_data(self) -> None:
         """Update the data and notify about the new state."""
-        _LOGGER.debug("Update the data in iAlarm-MK status: %s", self.hub.state)
+        _LOGGER.debug("Update the data in iAlarm-MK status: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
         self.async_set_updated_data(self.hub.state)
 
     def _update_data(self) -> None:
