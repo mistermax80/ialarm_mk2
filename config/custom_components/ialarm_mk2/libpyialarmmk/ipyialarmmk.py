@@ -68,7 +68,6 @@ class iAlarmMkInterface:
 
         self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd, self.logger)
         self.status = None
-        self.subscribed_task = None
         self.callback = None
         self.hass = hass
 
@@ -79,62 +78,42 @@ class iAlarmMkInterface:
         self.callback = callback
 
     async def subscribe(self):
-        '''Funzione principale per mantenere la connessione.'''
-        disconnect_time = 60 * 5  # 5 minuti
-        self.subscribed_task = asyncio.create_task(self._maintain_connection(disconnect_time))
-        self.logger.debug("Task created: %s", self.subscribed_task)
+        '''Fuzione migliorata.'''
+        disconnect_time = 60 * 5
 
-    async def _maintain_connection(self, disconnect_time):
-        '''Gestisce la connessione e la disconnessione periodica.'''
-        transport = None
-        try:
-            while True:
-                transport, protocol = await self._connect()
+        while True:
+            loop = asyncio.get_running_loop()
+            on_con_lost = loop.create_future()
+            try:
+                transport, protocol = await loop.create_connection(
+                    lambda: iAlarmMkPushClient(
+                        self.host,
+                        self.port,
+                        self.uid,
+                        self.set_status,
+                        loop,
+                        on_con_lost,
+                        self.logger,
+                    ),
+                    self.host,
+                    self.port,
+                )
                 self.logger.info("Connected to the server.")
-                await asyncio.sleep(disconnect_time)  # Timeout di disconnessione
-        except asyncio.CancelledError:
-            await self._handle_task_cancellation(transport)
-        except Exception as e:
-            await self._handle_unexpected_error(e, transport)
-        finally:
-            if transport:
-                transport.close()
-                self.logger.info("Transport closed.")
+                await asyncio.sleep(disconnect_time)
 
-    async def _connect(self):
-        '''Crea una nuova connessione.'''
-        on_con_lost = asyncio.get_running_loop().create_future()
-        return await asyncio.get_running_loop().create_connection(
-            lambda: iAlarmMkPushClient(
-                self.host,
-                self.port,
-                self.uid,
-                self.set_status,
-                asyncio.get_running_loop(),
-                on_con_lost,
-                self.logger,
-            ),
-            self.host,
-            self.port,
-        )
+            except (ConnectionError, TimeoutError) as e:
+                self.logger.error(f"Connection error: {e}")
+                await asyncio.sleep(1)  # Attendi un secondo prima di ritentare
 
-    async def _handle_task_cancellation(self, transport):
-        '''Gestisce la cancellazione del task.'''
-        self.logger.info("Subscription task was cancelled.")
-        if transport:
-            transport.close()
+            except Exception as e:
+                self.logger.error(f"Unexpected error: {e}")
 
-    async def _handle_unexpected_error(self, error, transport):
-        '''Gestisce errori imprevisti durante la connessione.'''
-        self.logger.error(f"Unexpected error: {error}")
-        if transport:
-            transport.close()
+            finally:
+                if transport:
+                    transport.close()
+                    self.logger.info("Transport closed.")
+                await asyncio.sleep(1)  # Attendi un secondo prima di tentare di riconnettersi
 
-    def cancel_subscription(self):
-        '''Cancella il task di sottoscrizione per evitare thread demoniaci.'''
-        if self.subscribed_task:
-            self.subscribed_task.cancel()
-            self.logger.info("Subscription task cancelled.")
 
     def _get_status(self):
         self.logger.debug("Retrieving DevStatus...")

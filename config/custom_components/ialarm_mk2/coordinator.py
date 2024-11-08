@@ -1,4 +1,5 @@
 '''Coordinator.'''
+import asyncio
 from asyncio.timeouts import timeout
 from datetime import datetime, timedelta
 import logging
@@ -42,7 +43,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             # Registrazione listener di spegnimento
             self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
             # Start the subscription in the background
-            await self.hub.ialarmmk.subscribe()
+            self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
+            _LOGGER.debug("Task: %s", self._subscription_task)
+            #await self.hub.ialarmmk.subscribe()
             #self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
             #asyncio.run(self.hub.ialarmmk.subscribe())
 
@@ -174,6 +177,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self, *args):
         """Gestisci la chiusura delle risorse quando Home Assistant si spegne."""
-        _LOGGER.info("Shutting down iAlarmMk custom component...")
-        self.hub.ialarmmk.ialarmmkClient.cancel_subscription()
+        _LOGGER.info("Shutting down iAlarmMk custom component, and close the connections active...")
+        if self._subscription_task:
+            self._subscription_task.cancel()
         self.hub.ialarmmk.ialarmmkClient.logout()
