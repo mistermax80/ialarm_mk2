@@ -8,6 +8,7 @@ from homeassistant.components.alarm_control_panel import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     STATE_ALARM_ARMED_AWAY,
+    STATE_ALARM_ARMED_CUSTOM_BYPASS,
     STATE_ALARM_ARMED_HOME,
     STATE_ALARM_ARMING,
     STATE_ALARM_DISARMED,
@@ -30,6 +31,7 @@ IALARMMK_TO_HASS = {
     ipyialarmmk.iAlarmMkInterface.DISARMED: STATE_ALARM_DISARMED,
     ipyialarmmk.iAlarmMkInterface.TRIGGERED: STATE_ALARM_TRIGGERED,
     ipyialarmmk.iAlarmMkInterface.ALARM_ARMING: STATE_ALARM_ARMING,
+    ipyialarmmk.iAlarmMkInterface.ARMED_PARTIAL: STATE_ALARM_ARMED_CUSTOM_BYPASS,
     ipyialarmmk.iAlarmMkInterface.UNAVAILABLE: STATE_UNAVAILABLE,
 }
 
@@ -50,6 +52,7 @@ class iAlarmMkPanel(
     _attr_supported_features = (
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
+        | AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS
     )
     _attr_name = "iAlarm-MK"
     _attr_icon = "mdi:security"
@@ -59,11 +62,7 @@ class iAlarmMkPanel(
         super().__init__(coordinator)
         self._attr_unique_id = coordinator.hub.mac
         self.code_arm_required = False
-        self._attr_device_info = DeviceInfo(
-            manufacturer="iAlarm-MK",
-            name=self.name,
-            connections={(dr.CONNECTION_NETWORK_MAC, coordinator.hub.mac)},
-        )
+        self._attr_device_info = coordinator.hub.device_info
 
     @property
     def state(self) -> str | None:
@@ -81,3 +80,7 @@ class iAlarmMkPanel(
     def alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command."""
         self.coordinator.hub.ialarmmk.arm_away()
+
+    def alarm_arm_custom_bypass(self, code: str | None = None) -> None:
+        """Send arm away command."""
+        self.coordinator.hub.ialarmmk.arm_partial()

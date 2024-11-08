@@ -1117,6 +1117,7 @@ Cid = {
     "3401": "Arming Report",
     "3441": "Staying Report",
     "3570": "Bypass recovery",
+    "3456": "Parzial Report"
 }
 
 TZ = {

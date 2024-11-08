@@ -2,6 +2,7 @@
 import asyncio
 from asyncio.timeouts import timeout
 from datetime import datetime, timedelta
+import json
 import logging
 from zoneinfo import ZoneInfo
 
@@ -54,6 +55,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             idsSensors = self.hub.ialarmmk.ialarmmkClient.GetSensor()
             _LOGGER.debug("Retrieve sensors list OK.")
             zones = self.hub.ialarmmk.ialarmmkClient.GetZone()
+            #_LOGGER.debug("Retrieve zones list OK. Zones: %s",zones)
             _LOGGER.debug("Retrieve zones list OK.")
             self.hub.ialarmmk.ialarmmkClient.logout()
             _LOGGER.debug("Logout OK.")
@@ -71,6 +73,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         except Exception:
                 _LOGGER.exception("Error in setup entities.")
+                self.hub.ialarmmk.ialarmmkClient.logout()
+                _LOGGER.error("Logout OK.")
 
         for sc in SENSOR_CONFIG:
             iAlarmSensor = IAlarmmkSensor(self, self.hub.device_info, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
@@ -81,18 +85,20 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         _LOGGER.debug("Received event from server, data: %s", event_data)
 
         _LOGGER.debug("Old state: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
-        self.hub.state = event_data.get("Status", self.hub.state)
+        status = event_data.get("Status")
+        if status is not None:
+            self.hub.state = status
         _LOGGER.debug("New state: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
 
         # Evento personalizzato con nome "ialarm_mk_event"
-        self.hass.bus.async_fire("ialarm_mk2_event", event_data)
+        self.hass.bus.async_fire("ialarm_mk2_event", json.dumps(event_data))
 
         # Schedule the update
         self.hass.async_create_task(self.async_update_data())
 
     async def async_update_data(self) -> None:
         """Update the data and notify about the new state."""
-        _LOGGER.debug("Update the data in iAlarm-MK status: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
+        _LOGGER.debug("Update the data status: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
         self.async_set_updated_data(self.hub.state)
 
     async def _async_update_data(self) -> None:
@@ -101,6 +107,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         try:
             async with timeout(15):
                 await self.hass.async_add_executor_job(self._update_data)
+
+            await self.async_update_data()
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             raise UpdateFailed(error) from error
@@ -181,3 +189,4 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         if self._subscription_task:
             self._subscription_task.cancel()
         self.hub.ialarmmk.ialarmmkClient.logout()
+        _LOGGER.info("Shutdown iAlarmMk custom component completed.")

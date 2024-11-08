@@ -27,6 +27,7 @@ class iAlarmMkInterface:
     TRIGGERED = 4
     ALARM_ARMING = 5
     UNAVAILABLE = 6
+    ARMED_PARTIAL = 8
 
     status_dict = {
         ARMED_AWAY: "ARMED_AWAY",
@@ -35,7 +36,8 @@ class iAlarmMkInterface:
         CANCEL: "CANCEL",
         TRIGGERED: "TRIGGERED",
         ALARM_ARMING: "ALARM_ARMING",
-        UNAVAILABLE: "UNAVAILABLE"
+        UNAVAILABLE: "UNAVAILABLE",
+        ARMED_PARTIAL: "ARMED_PARTIAL"
     }
 
     ZONE_NOT_USED = 0
@@ -140,14 +142,18 @@ class iAlarmMkInterface:
             3441: 2,
             1100: 4, 1101: 4, 1120: 4,
             1131: 4, 1132: 4, 1133: 4,
-            1134: 4, 1137: 4
+            1134: 4, 1137: 4,
+            3456: 8
         }
+        
+        self.status = status_map.get(cid, data_event_received.get("status",self.status))
+        self.logger.debug("Real status updated to: %s(%s)", self.status_dict.get(self.status),self.status)
 
         event_data = {
             "Name": data_event_received.get("Name"),
             "Aid": data_event_received.get("Aid"),
             "Cid": cid,
-            "Status": status_map.get(cid, data_event_received.get("status")),
+            "Status": self.status,
             "Content": data_event_received.get("Content"),
             "ZoneName": data_event_received.get("ZoneName"),
             "Zone": data_event_received.get("Zone"),
@@ -196,6 +202,15 @@ class iAlarmMkInterface:
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in away mode: %s", e)
+
+    def arm_partial(self) -> None:
+        try:
+            self.ialarmmkClient.login()
+            self.ialarmmkClient.SetAlarmStatus(8)
+            self._set_status(self.ARMED_PARTIAL)
+            self.ialarmmkClient.logout()
+        except Exception as e:
+            self.logger.error("Error arming alarm in partial mode: %s", e)
 
     def _set_status(self, status):
         if self.hass is not None:
