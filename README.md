@@ -16,6 +16,7 @@ Currently, it is possible to:
 - Check the battery status of sensors: for all sensors
 - Check the bypass status: for all sensors
 - Check the connection status: for all sensors
+- Listen event: ialarm_mk2_event
 
 In the future, it will be possible to:
 - Configure sensors
