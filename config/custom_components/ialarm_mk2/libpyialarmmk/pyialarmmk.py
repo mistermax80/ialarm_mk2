@@ -743,6 +743,10 @@ class iAlarmMkClient:
     def _receive(self):
         try:
             data = self.sock.recv(1024)
+            if data is None:
+                self._print("Data received is null")
+            else:
+                self._print("Data received is: %s", data)
         except socket.timeout:
             raise ConnectionError("Connection timed out")
         except OSError as e:

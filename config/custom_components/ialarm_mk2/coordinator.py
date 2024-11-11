@@ -1,5 +1,6 @@
 '''Coordinator.'''
 
+import asyncio
 from asyncio.timeouts import timeout
 from datetime import datetime, timedelta
 import logging
@@ -68,6 +69,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> None:
         """Fetch data from iAlarm-MK 2."""
         _LOGGER.info("Fetching data.")
+
+        if not self.last_update_success:
+            _LOGGER.info("Last update was not successful, waiting 5 seconds.")
+            await asyncio.sleep(5)
         tz = ZoneInfo(self.hass.config.time_zone)
         current_time = datetime.now(tz)
 
@@ -93,7 +98,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                         if attempts >= max_attempts:
                             _LOGGER.error("Failed after %d attempts", max_attempts)
                             raise UpdateFailed(e) from e
-                        _LOGGER.info("Retrying... Attempt %d of %d", attempts + 1, max_attempts)
+                        _LOGGER.info("Retrying... Attempt %d of %d in 5 seconds.", attempts + 1, max_attempts)
+                        await asyncio.sleep(5)
 
                 # Inizializza un messaggio di log
                 log_message = "\n"
