@@ -863,10 +863,9 @@ class iAlarmMkClient:
                     elem = etree.Element(tag)
                     parent.append(elem)
                     iAlarmMkClient._convert_dict_to_xml_recurse(elem, child)
-        else:
-            if dictitem is not None:
-                # None Element should be written without "None" value
-                parent.text = str(dictitem)
+        elif dictitem is not None:
+            # None Element should be written without "None" value
+            parent.text = str(dictitem)
 
     @staticmethod
     def _convert_dict_to_xml(xmldict: dict):
@@ -908,11 +907,10 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self.handle_connect()
 
     def data_received(self, data: bytes) -> None:
-        #self._print("\n****\niAlarmMkPushClient.data_received\n"+str(data)+"\n****\n")
         return self.handle_read(data)
 
     def connection_lost(self, exc):
-        #self._print("\n****\niAlarmMkPushClient.connection_lost\n"+str(exc)+"\n****\n")
+        self._print("iAlarmMkPushClient.connection_lost exc: "+str(exc))
         self._close()
 
     def __del__(self):
@@ -940,64 +938,76 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         raise
 
     def handle_read(self, data):
-        # data = self.recv(1024)
-        if type(data) == str:
-            data = data.encode()
-        head = data[0:4]
+        try:
+            if type(data) == str:
+                data = data.encode()
+            head = data[0:4]
 
-        #self._print("\n****\niAlarmMkPushClient.handle_read\n head:"+str(head)+"\n****\n")
+            # Logging dell'header e della lunghezza dei dati ricevuti
+            self._print(f"iAlarmMkPushClient.handle_read - Header: {head}, Data Length: {len(data)}")
 
-        resp = None
+            resp = None
 
-        if head == b"%maI":
-            threading.Timer(self.keepalive, self._keepalive).start()
+            if head == b"%maI":
+                self._print("iAlarmMkPushClient.handle_read - Keepalive message received.")
+                threading.Timer(self.keepalive, self._keepalive).start()
 
-        elif head == b"@ieM":
-            xpath = "/Root/Pair/Push"
-            resp = xmltodict.parse(
-                self._xor(data[16:-4]).decode(),
-                xml_attribs=False,
-                dict_constructor=dict,
-                postprocessor=self._xmlread,
-            )
-            self.push = self._select(resp, xpath)
-            # protocol update
-            if self.push:
-                err = self._select(resp, "%s/Err" % xpath)
-                if err:
-                    self._close()
-                    raise PushClientError("Push subscription error")
+            elif head == b"@ieM":
+                self._print("iAlarmMkPushClient.handle_read - Pairing message received.")
+                xpath = "/Root/Pair/Push"
+                resp = xmltodict.parse(
+                    self._xor(data[16:-4]).decode(),
+                    xml_attribs=False,
+                    dict_constructor=dict,
+                    postprocessor=self._xmlread,
+                )
+                self.push = self._select(resp, xpath)
+                if self.push:
+                    err = self._select(resp, "%s/Err" % xpath)
+                    if err:
+                        self._print("iAlarmMkPushClient.handle_read - Pairing error detected, closing connection.")
+                        self._close()
+                        raise PushClientError("Push subscription error")
+                    else:
+                        self._print("iAlarmMkPushClient.handle_read - Device successfully paired.")
                 else:
-                    self._print("Device paired!")
-                    pass
-            else:
+                    self._print("iAlarmMkPushClient.handle_read - No pairing information found.")
+                    xpath = "/Root/Host/Alarm"
+                    self._print(f"iAlarmMkPushClient.handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                    self.handler(self._select(resp, xpath))
+
+            elif head == b"@alA":
+                self._print("iAlarmMkPushClient.handle_read - Alarm message received.")
                 xpath = "/Root/Host/Alarm"
+                resp = xmltodict.parse(
+                    self._xor(data[16:-4]).decode(),
+                    xml_attribs=False,
+                    dict_constructor=dict,
+                    postprocessor=self._xmlread,
+                )
+                self._print(f"iAlarmMkPushClient.handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
                 self.handler(self._select(resp, xpath))
-        elif head == b"@alA":
-            xpath = "/Root/Host/Alarm"
-            resp = xmltodict.parse(
-                self._xor(data[16:-4]).decode(),
-                xml_attribs=False,
-                dict_constructor=dict,
-                postprocessor=self._xmlread,
-            )
-            self.handler(self._select(resp, xpath))
 
-        elif head == b"!lmX":
-            xpath = "/Root/Host/Alarm"
-            resp = xmltodict.parse(
-                data[16:-4],
-                xml_attribs=False,
-                dict_constructor=dict,
-                postprocessor=self._xmlread,
-            )
-            self.handler(self._select(resp, xpath))
+            elif head == b"!lmX":
+                self._print("iAlarmMkPushClient.handle_read - Alternate alarm message received.")
+                xpath = "/Root/Host/Alarm"
+                resp = xmltodict.parse(
+                    data[16:-4],
+                    xml_attribs=False,
+                    dict_constructor=dict,
+                    postprocessor=self._xmlread,
+                )
+                self._print(f"iAlarmMkPushClient.handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                self.handler(self._select(resp, xpath))
 
-        else:
-            self._close()
-            raise ResponseError("Response error")
-        
-        self._print("\n****\niAlarmMkPushClient.handle_read\nresp: "+str(resp)+"\n****\n")
+            else:
+                self._print(f"iAlarmMkPushClient.handle_read - Unrecognized header: {head}, closing connection.")
+                self._close()
+                raise ResponseError("Response error")
+
+        except Exception as e:
+            self._print(f"iAlarmMkPushClient.handle_read - Error: {str(e)}")
+            raise
 
     def handle_write(self):
         if self.mesg is not None:
@@ -1017,16 +1027,14 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             if self.transport.is_closing() is False:
                 self.transport.close()
                 self.on_con_lost.set_result(True)
-            pass
         except Exception as e:
             self._print(e)
-            pass
 
     def _keepalive(self):
         mesg = b"%maI"
         self.transport.write(mesg)
         self.mesg = None
-        self._print(f"\n****\niAlarmMkPushClient._keepalive\n{mesg}\n****\n")
+        self._print("iAlarmMkPushClient._keepalive:"+str(mesg))
 
     def _print(self, data):
         if self.logger is not None:
@@ -1109,6 +1117,7 @@ Cid = {
     "3401": "Arming Report",
     "3441": "Staying Report",
     "3570": "Bypass recovery",
+    "3456": "Parzial Report"
 }
 
 TZ = {

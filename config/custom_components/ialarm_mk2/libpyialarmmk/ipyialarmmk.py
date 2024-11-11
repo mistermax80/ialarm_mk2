@@ -27,6 +27,18 @@ class iAlarmMkInterface:
     TRIGGERED = 4
     ALARM_ARMING = 5
     UNAVAILABLE = 6
+    ARMED_PARTIAL = 8
+
+    status_dict = {
+        ARMED_AWAY: "ARMED_AWAY",
+        DISARMED: "DISARMED",
+        ARMED_STAY: "ARMED_STAY",
+        CANCEL: "CANCEL",
+        TRIGGERED: "TRIGGERED",
+        ALARM_ARMING: "ALARM_ARMING",
+        UNAVAILABLE: "UNAVAILABLE",
+        ARMED_PARTIAL: "ARMED_PARTIAL"
+    }
 
     ZONE_NOT_USED = 0
     ZONE_IN_USE = 1 << 0
@@ -49,7 +61,6 @@ class iAlarmMkInterface:
         logger=None,
     ):
         '''Impostazione.'''
-
         self.threadID = "iAlarmMK2-Thread"
         self.host = host
         self.port = port
@@ -58,7 +69,7 @@ class iAlarmMkInterface:
         self.logger = logger
 
         self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd, self.logger)
-
+        self.status = None
         self.callback = None
         self.hass = hass
 
@@ -69,66 +80,92 @@ class iAlarmMkInterface:
         self.callback = callback
 
     async def subscribe(self):
+        '''Fuzione migliorata.'''
         disconnect_time = 60 * 5
+
         while True:
             loop = asyncio.get_running_loop()
             on_con_lost = loop.create_future()
-            transport, protocol = await loop.create_connection(
-                lambda: iAlarmMkPushClient(
+            try:
+                transport, protocol = await loop.create_connection(
+                    lambda: iAlarmMkPushClient(
+                        self.host,
+                        self.port,
+                        self.uid,
+                        self.set_status,
+                        loop,
+                        on_con_lost,
+                        self.logger,
+                    ),
                     self.host,
                     self.port,
-                    self.uid,
-                    self.set_status,
-                    loop,
-                    on_con_lost,
-                    self.logger,
-                ),
-                self.host,
-                self.port,
-            )
-
-            try:
+                )
+                self.logger.info("Connected to the server.")
                 await asyncio.sleep(disconnect_time)
+
+            except (ConnectionError, TimeoutError) as e:
+                self.logger.error(f"Connection error: {e}")
+                await asyncio.sleep(1)  # Attendi un secondo prima di ritentare
+
             except Exception as e:
-                self.logger.debug(e)
-                pass
+                self.logger.error(f"Unexpected error: {e}")
+
             finally:
-                transport.close()
-                transport = None
-                await asyncio.sleep(1)
+                if transport:
+                    transport.close()
+                    self.logger.info("Transport closed.")
+                await asyncio.sleep(1)  # Attendi un secondo prima di tentare di riconnettersi
+
 
     def _get_status(self):
+        self.logger.debug("Retrieving DevStatus...")
         try:
             self.ialarmmkClient.login()
             self.status = self.ialarmmkClient.GetAlarmStatus().get("DevStatus")
+            self.logger.debug("DevStatus: %s(%s)", self.status_dict.get(self.status),self.status)
             self.ialarmmkClient.logout()
-        except:
+        except Exception:
             self.status = self.UNAVAILABLE
-            pass
 
     def get_status(self):
         return self.status
 
-    def set_status(self, status):
-        new_status = int(status.get("Cid"))
+    def set_status(self, data_event_received):
+        """Recupera i dati dell'evento ed imposta lo stato dell'allarme."""
+        # Ottieni il nuovo stato
+        cid = int(data_event_received.get("Cid"))
+        # Mappatura degli stati
+        status_map = {
+            1401: 1,
+            1406: 1,
+            3401: 0,
+            3441: 2,
+            1100: 4, 1101: 4, 1120: 4,
+            1131: 4, 1132: 4, 1133: 4,
+            1134: 4, 1137: 4,
+            3456: 8
+        }
+        
+        self.status = status_map.get(cid, data_event_received.get("status",self.status))
+        self.logger.debug("Real status updated to: %s(%s)", self.status_dict.get(self.status),self.status)
 
-        if new_status == 1401:
-            self.status = 1
-        elif new_status == 1406:
-            self.status = 1
-        elif new_status == 3401:
-            self.status = 0
-        elif new_status == 3441:
-            self.status = 2
-        elif new_status == 1100 or new_status == 1101 or new_status == 1120:
-            self.status = 4
-        elif new_status == 1131 or new_status == 1132 or new_status == 1133:
-            self.status = 4
-        elif new_status == 1134 or new_status == 1137:
-            self.status = 4
+        event_data = {
+            "Name": data_event_received.get("Name"),
+            "Aid": data_event_received.get("Aid"),
+            "Cid": cid,
+            "Status": self.status,
+            "Content": data_event_received.get("Content"),
+            "ZoneName": data_event_received.get("ZoneName"),
+            "Zone": data_event_received.get("Zone"),
+            "Err": data_event_received.get("Err"),
+        }
 
-        if self.callback is not None:
-            self.callback(self.status)
+        # Invoca il callback se definito
+        if self.callback:
+            self.logger.debug("Invoke callback to passing event data: %s", event_data)
+            self.callback(event_data)
+        else:
+            self.logger.debug("Callback is None")
 
     def cancel_alarm(self) -> None:
         try:
@@ -136,8 +173,8 @@ class iAlarmMkInterface:
             self.ialarmmkClient.SetAlarmStatus(3)
             self._set_status(self.DISARMED)
             self.ialarmmkClient.logout()
-        except:
-            pass
+        except Exception as e:
+            self.logger.error("Error canceling alarm: %s", e)
 
     def arm_stay(self) -> None:
         try:
@@ -145,8 +182,8 @@ class iAlarmMkInterface:
             self.ialarmmkClient.SetAlarmStatus(2)
             self._set_status(self.ARMED_STAY)
             self.ialarmmkClient.logout()
-        except:
-            pass
+        except Exception as e:
+            self.logger.error("Error arming alarm in stay mode: %s", e)
 
     def disarm(self) -> None:
         try:
@@ -154,8 +191,8 @@ class iAlarmMkInterface:
             self.ialarmmkClient.SetAlarmStatus(1)
             self._set_status(self.DISARMED)
             self.ialarmmkClient.logout()
-        except:
-            pass
+        except Exception as e:
+            self.logger.error("Error disarming alarm: %s", e)
 
     def arm_away(self) -> None:
         try:
@@ -163,18 +200,32 @@ class iAlarmMkInterface:
             self.ialarmmkClient.SetAlarmStatus(0)
             self._set_status(self.ALARM_ARMING)
             self.ialarmmkClient.logout()
-        except:
-            pass
+        except Exception as e:
+            self.logger.error("Error arming alarm in away mode: %s", e)
+
+    def arm_partial(self) -> None:
+        try:
+            self.ialarmmkClient.login()
+            self.ialarmmkClient.SetAlarmStatus(8)
+            self._set_status(self.ARMED_PARTIAL)
+            self.ialarmmkClient.logout()
+        except Exception as e:
+            self.logger.error("Error arming alarm in partial mode: %s", e)
 
     def _set_status(self, status):
         if self.hass is not None:
-            asyncio.run_coroutine_threadsafe(
-                self.async_set_status(status), self.hass.loop
-            ).result()
+            try:
+                result = asyncio.run_coroutine_threadsafe(
+                    self.async_set_status(status), self.hass.loop
+                ).result()
+                # Puoi anche loggare il risultato se necessario
+                self.logger.debug("Status updated successfully: %s", status)
+            except Exception as e:
+                # Gestisci l'eccezione e logga l'errore
+                self.logger.error("Error updating status: %s", e)
 
     async def async_set_status(self, status):
         self.callback(status)
-        pass
 
     def get_mac(self) -> str:
         self.ialarmmkClient.login()
@@ -182,7 +233,6 @@ class iAlarmMkInterface:
         self.ialarmmkClient.logout()
         if network_info is not None:
             mac = network_info.get("Mac", "")
-
         if mac:
             return mac
         raise ConnectionError(
