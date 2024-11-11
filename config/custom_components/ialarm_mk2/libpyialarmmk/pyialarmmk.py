@@ -484,7 +484,7 @@ class iAlarmMkClient:
 
     def SetAlarmStatus(self, status):
         cmd = OD()
-        cmd["DevStatus"] = TYP(status, ["ARM", "DISARM", "STAY", "CLEAR"])
+        cmd["DevStatus"] = TYP(status, ["ARM", "DISARM", "STAY", "CLEAR","","","","","PARTIAL"])
         cmd["Err"] = None
         xpath = "/Root/Host/SetAlarmStatus"
         return self._(xpath, cmd)
@@ -746,7 +746,7 @@ class iAlarmMkClient:
             if data is None:
                 self._print("Data received is null")
             else:
-                self._print("Data received is: %s", data)
+                self._print(f"Data received is: {data}")
         except socket.timeout:
             raise ConnectionError("Connection timed out")
         except OSError as e:

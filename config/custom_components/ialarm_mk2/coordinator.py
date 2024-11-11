@@ -32,7 +32,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=60),
         )
         self.hub: IAlarmMkHub = hub
-        #self._subscription_task = None
+        self._subscription_task = None
         self.hub.ialarmmk.set_callback(self.callback)
         self.sensors:IAlarmmkSensor = []
 
@@ -104,6 +104,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> None:
         """Fetch data from iAlarm-MK 2."""
         _LOGGER.info("Fetching data...")
+
+        if not self.last_update_success:
+            _LOGGER.info("Last update was not successful, waiting 5 seconds.")
+            await asyncio.sleep(5)
+
         try:
             async with timeout(15):
                 await self.hass.async_add_executor_job(self._update_data)
@@ -125,23 +130,24 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             attempts = 0
             max_attempts = 3
 
-                while attempts < max_attempts:
-                    try:
-                        self.hub.ialarmmk.ialarmmkClient.login()
-                        _LOGGER.debug("Login ok.")
-                        status = self.hub.ialarmmk.ialarmmkClient.GetByWay()
-                        _LOGGER.debug("Retrieve last sensors status.")
-                        _LOGGER.debug("Status: %s", status)
-                        break  # Se il blocco riesce, esci dal ciclo
-                    except Exception as e:
-                        _LOGGER.exception("Error during fetch data.")
-                        self.hub.ialarmmk.ialarmmkClient.logout()
-                        _LOGGER.info("After error, logout ok.")
-                        attempts += 1
-                        if attempts >= max_attempts:
-                            _LOGGER.error("Failed after %d attempts", max_attempts)
-                            raise UpdateFailed(e) from e
-                        _LOGGER.info("Retrying... Attempt %d of %d", attempts + 1, max_attempts)
+            while attempts < max_attempts:
+                try:
+                    self.hub.ialarmmk.ialarmmkClient.login()
+                    _LOGGER.debug("Login ok.")
+                    status = self.hub.ialarmmk.ialarmmkClient.GetByWay()
+                    _LOGGER.debug("Retrieve last sensors status.")
+                    _LOGGER.debug("Status: %s", status)
+                    break  # Se il blocco riesce, esci dal ciclo
+                except Exception as e:
+                    _LOGGER.exception("Error during fetch data.")
+                    self.hub.ialarmmk.ialarmmkClient.logout()
+                    _LOGGER.info("After error, logout ok.")
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        _LOGGER.error("Failed after %d attempts", max_attempts)
+                        raise UpdateFailed(e) from e
+                    _LOGGER.info("Retrying... Attempt %d of %d in 5 seconds.", attempts + 1, max_attempts)
+                    asyncio.sleep(5)
 
             # Inizializza un messaggio di log
             log_message = "\n"
