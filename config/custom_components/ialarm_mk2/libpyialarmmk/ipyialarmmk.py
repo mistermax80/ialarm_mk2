@@ -13,9 +13,12 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
-
+import json
+from homeassistant.core import HomeAssistant
 
 class iAlarmMkInterface:
     """Interface with pyialarmmk library."""
@@ -57,8 +60,8 @@ class iAlarmMkInterface:
         pwd: str,
         host: str,
         port: int,
-        hass=None,
-        logger=None,
+        hass: HomeAssistant = None,
+        logger = None,
     ):
         '''Impostazione.'''
         self.threadID = "iAlarmMK2-Thread"
@@ -71,14 +74,16 @@ class iAlarmMkInterface:
         self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd, self.logger)
         self.status = None
         self.callback = None
-        self.hass = hass
+        self.callback_only_status = None
+        self.hass: HomeAssistant = hass
 
         self._get_status()
 
-    def set_callback(self, callback):
+    def set_callback(self, callback, callback_only_status):
         '''set_callback.'''
         self.callback = callback
-
+        self.callback_only_status = callback_only_status
+        
     async def subscribe(self):
         '''Fuzione migliorata.'''
         disconnect_time = 60 * 5
@@ -149,20 +154,25 @@ class iAlarmMkInterface:
         self.status = status_map.get(cid, data_event_received.get("status",self.status))
         self.logger.debug("Real status updated to: %s(%s)", self.status_dict.get(self.status),self.status)
 
+        tz = ZoneInfo(self.hass.config.time_zone)
+        current_time = datetime.now(tz)
+
         event_data = {
             "Name": data_event_received.get("Name"),
             "Aid": data_event_received.get("Aid"),
             "Cid": cid,
             "Status": self.status,
+            "LastRealUpdateStatus": current_time,
             "Content": data_event_received.get("Content"),
             "ZoneName": data_event_received.get("ZoneName"),
             "Zone": data_event_received.get("Zone"),
             "Err": data_event_received.get("Err"),
+            "Json": json.dumps(data_event_received)
         }
 
         # Invoca il callback se definito
         if self.callback:
-            self.logger.debug("Invoke callback to passing event data: %s", event_data)
+            #self.logger.debug("Invoke callback to passing event data: %s", event_data)
             self.callback(event_data)
         else:
             self.logger.debug("Callback is None")
@@ -225,16 +235,27 @@ class iAlarmMkInterface:
                 self.logger.error("Error updating status: %s", e)
 
     async def async_set_status(self, status):
-        self.callback(status)
+        tz = ZoneInfo(self.hass.config.time_zone)
+        current_time = datetime.now(tz)
+        data = {
+            'Status': status,
+            'LastRealUpdateStatus': current_time
+        }
+        self.callback_only_status(data)
 
-    def get_mac(self) -> str:
+    def get_mac(self) -> dict:
         self.ialarmmkClient.login()
         network_info = self.ialarmmkClient.GetNet()
         self.ialarmmkClient.logout()
         if network_info is not None:
             mac = network_info.get("Mac", "")
+            name = network_info.get("Name", "iAlarm-MK")
+            return_data = {
+                'Mac': mac,
+                'Name': name
+        }
         if mac:
-            return mac
+            return return_data
         raise ConnectionError(
             "An error occurred trying to connect to the alarm "
             "system or received an unexpected reply"

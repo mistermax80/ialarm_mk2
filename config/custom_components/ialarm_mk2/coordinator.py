@@ -2,8 +2,8 @@
 import asyncio
 from asyncio.timeouts import timeout
 from datetime import datetime, timedelta
-import json
 import logging
+import time
 from zoneinfo import ZoneInfo
 
 from homeassistant.const import STATE_UNAVAILABLE
@@ -33,7 +33,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         )
         self.hub: IAlarmMkHub = hub
         self._subscription_task = None
-        self.hub.ialarmmk.set_callback(self.callback)
+        self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
+        #self.hub.ialarmmk.set_callback_only_status(self.callback_only_status)
         self.sensors:IAlarmmkSensor = []
 
     async def _async_setup(self):
@@ -75,6 +76,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 _LOGGER.exception("Error in setup entities.")
                 self.hub.ialarmmk.ialarmmkClient.logout()
                 _LOGGER.error("Logout OK.")
+                raise
 
         for sc in SENSOR_CONFIG:
             iAlarmSensor = IAlarmmkSensor(self, self.hub.device_info, sc["name"], sc["index"], sc["entity_id"], sc["unique_id"], sc["zone_type"])
@@ -90,8 +92,28 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hub.state = status
         _LOGGER.debug("New state: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
 
+        lastRealUpdateStatus = event_data.get("LastRealUpdateStatus")
+        if lastRealUpdateStatus is not None:
+            self.hub.lastRealUpdateStatus = lastRealUpdateStatus
+
         # Evento personalizzato con nome "ialarm_mk_event"
-        self.hass.bus.async_fire("ialarm_mk2_event", json.dumps(event_data))
+        self.hass.bus.async_fire("ialarm_mk2_event", event_data)
+
+        # Schedule the update
+        self.hass.async_create_task(self.async_update_data())
+
+    def callback_only_status(self, data_in: dict) -> None:
+        """Handle status updates from alarm panel."""
+        _LOGGER.debug("Received data in, data: %s", data_in)
+        _LOGGER.debug("Old state: %s(%s)", self.hub.ialarmmk.status_dict.get(self.hub.state),self.hub.state)
+        status = data_in.get("Status")
+        if status is not None:
+            self.hub.state = status
+        _LOGGER.debug("New state: %s(%s)", self.hub.ialarmmk.status_dict.get(status),status)
+
+        lastRealUpdateStatus = data_in.get("LastRealUpdateStatus")
+        if lastRealUpdateStatus is not None:
+            self.hub.lastRealUpdateStatus = lastRealUpdateStatus
 
         # Schedule the update
         self.hass.async_create_task(self.async_update_data())
@@ -146,8 +168,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     if attempts >= max_attempts:
                         _LOGGER.error("Failed after %d attempts", max_attempts)
                         raise UpdateFailed(e) from e
-                    _LOGGER.info("Retrying... Attempt %d of %d in 5 seconds.", attempts + 1, max_attempts)
-                    asyncio.sleep(5)
+                    _LOGGER.info("Retrying... Attempt %d of %d in 1 seconds.", attempts + 1, max_attempts)
+                    _LOGGER.debug("Waiting 1 second before next attempt.")
+                    time.sleep(1)
+                    _LOGGER.debug("Finished waiting, retrying now.")
 
             # Inizializza un messaggio di log
             log_message = "\n"

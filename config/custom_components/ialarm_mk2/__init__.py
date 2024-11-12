@@ -27,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
     _LOGGER.info("Set up iAlarm-MK 2 Integration from a config entry...")
 
-    hub: IAlarmMkHub = IAlarmMkHub(entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+    hub: IAlarmMkHub = IAlarmMkHub(hass, entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
 
     try:
         async with timeout(10):

@@ -746,7 +746,7 @@ class iAlarmMkClient:
             if data is None:
                 self._print("Data received is null")
             else:
-                self._print(f"Data received is: {data}")
+                self._print(f"Data received is length: {len(data)}")
         except socket.timeout:
             raise ConnectionError("Connection timed out")
         except OSError as e:

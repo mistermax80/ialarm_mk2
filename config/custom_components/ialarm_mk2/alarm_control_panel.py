@@ -58,6 +58,7 @@ class iAlarmMkPanel(
     def __init__(self, coordinator: iAlarmMk2Coordinator) -> None:
         """Initialize the alarm panel."""
         super().__init__(coordinator)
+        self._attr_name = coordinator.hub.name
         self._attr_unique_id = coordinator.hub.mac
         self.code_arm_required = False
         self._attr_device_info = coordinator.hub.device_info
@@ -66,6 +67,13 @@ class iAlarmMkPanel(
     def state(self) -> str | None:
         """Return the state of the device."""
         return IALARMMK_TO_HASS.get(self.coordinator.hub.state)
+
+    @property
+    def extra_state_attributes(self):
+        """Ritorna gli attributi personalizzati dinamici."""
+        return {
+            "lastRealUpdateStatus": self.coordinator.hub.lastRealUpdateStatus
+        }
 
     def alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
