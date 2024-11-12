@@ -186,47 +186,47 @@ class iAlarmMkInterface:
         except Exception as e:
             self.logger.error("Error canceling alarm: %s", e)
 
-    def arm_stay(self) -> None:
+    def arm_stay(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(2)
-            self._set_status(self.ARMED_STAY)
+            self._set_status(self.ARMED_STAY, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in stay mode: %s", e)
 
-    def disarm(self) -> None:
+    def disarm(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(1)
-            self._set_status(self.DISARMED)
+            self._set_status(self.DISARMED, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error disarming alarm: %s", e)
 
-    def arm_away(self) -> None:
+    def arm_away(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(0)
-            self._set_status(self.ALARM_ARMING)
+            self._set_status(self.ALARM_ARMING, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in away mode: %s", e)
 
-    def arm_partial(self) -> None:
+    def arm_partial(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(8)
-            self._set_status(self.ARMED_PARTIAL)
+            self._set_status(self.ARMED_PARTIAL, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in partial mode: %s", e)
 
-    def _set_status(self, status):
+    def _set_status(self, status, user_id: str | None) -> None:
         if self.hass is not None:
             try:
                 result = asyncio.run_coroutine_threadsafe(
-                    self.async_set_status(status), self.hass.loop
+                    self.async_set_status(status, user_id), self.hass.loop
                 ).result()
                 # Puoi anche loggare il risultato se necessario
                 self.logger.debug("Status updated successfully: %s", status)
@@ -234,12 +234,13 @@ class iAlarmMkInterface:
                 # Gestisci l'eccezione e logga l'errore
                 self.logger.error("Error updating status: %s", e)
 
-    async def async_set_status(self, status):
+    async def async_set_status(self, status, user_id: str | None) -> None:
         tz = ZoneInfo(self.hass.config.time_zone)
         current_time = datetime.now(tz)
         data = {
             'Status': status,
-            'LastRealUpdateStatus': current_time
+            'LastRealUpdateStatus': current_time,
+            'user_id': user_id
         }
         self.callback_only_status(data)
 

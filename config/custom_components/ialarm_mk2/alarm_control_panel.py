@@ -69,6 +69,11 @@ class iAlarmMkPanel(
         return IALARMMK_TO_HASS.get(self.coordinator.hub.state)
 
     @property
+    def changed_by(self) -> str | None:
+        """Return the changed_by of the device."""
+        return self.coordinator.hub.changed_by
+
+    @property
     def extra_state_attributes(self):
         """Ritorna gli attributi personalizzati dinamici."""
         return {
@@ -77,16 +82,29 @@ class iAlarmMkPanel(
 
     def alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
-        self.coordinator.hub.ialarmmk.disarm()
+        self.coordinator.hub.ialarmmk.disarm(self._retrive_user_id())
 
     def alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command."""
-        self.coordinator.hub.ialarmmk.arm_stay()
+        self.coordinator.hub.ialarmmk.arm_stay(self._retrive_user_id())
 
     def alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command."""
-        self.coordinator.hub.ialarmmk.arm_away()
+        self.coordinator.hub.ialarmmk.arm_away(self._retrive_user_id())
 
     def alarm_arm_custom_bypass(self, code: str | None = None) -> None:
         """Send arm away command."""
-        self.coordinator.hub.ialarmmk.arm_partial()
+        self.coordinator.hub.ialarmmk.arm_partial(self._retrive_user_id())
+
+    def _retrive_user_id(self) -> str:
+        user_id: str = None
+        try:
+            if self._context.user_id:
+                user_id = self._context.user_id
+            elif self._context.origin_event.context.user_id:
+                user_id = self._context.origin_event.context.user_id
+        except AttributeError as e:
+            self.logger.error("Error retrieving user_id: %s", e)
+        return user_id
+
+

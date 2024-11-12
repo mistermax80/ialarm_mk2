@@ -115,8 +115,23 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         if lastRealUpdateStatus is not None:
             self.hub.lastRealUpdateStatus = lastRealUpdateStatus
 
+        user_id = data_in.get("user_id")
+        self.hub.changed_by = user_id
+        _LOGGER.debug("user_id: %s", user_id)
+        '''if user_id is not None:
+            user_name = self.get_user_name(user_id)
+            self.hub.changed_by = user_name if user_name else "Sconosciuto"
+        '''
         # Schedule the update
         self.hass.async_create_task(self.async_update_data())
+
+
+    async def get_user_name(self, user_id):
+        user = await self.hass.auth.async_get_user(user_id)
+        if user:
+            return user.name
+        else:
+            return None  # Se l'utente non esiste o non è trovato
 
     async def async_update_data(self) -> None:
         """Update the data and notify about the new state."""

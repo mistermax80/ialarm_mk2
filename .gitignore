@@ -19512,3 +19512,4 @@ requirements.txt
 config/home-assistant_v2.db-shm
 config/home-assistant_v2.db-wal
 config/home-assistant.log.fault
+config/.storage/frontend.user_data_00976802ae384da48ff53f970df3b404
