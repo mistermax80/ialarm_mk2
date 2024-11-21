@@ -33,8 +33,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         )
         self.hub: IAlarmMkHub = hub
         self._subscription_task = None
+        self.last_user_id = None
         self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
-        #self.hub.ialarmmk.set_callback_only_status(self.callback_only_status)
         self.sensors:IAlarmmkSensor = []
 
     async def _async_setup(self):
@@ -45,6 +45,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             # Registrazione listener di spegnimento
             self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
             # Start the subscription in the background
+            #self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
             self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
             _LOGGER.debug("Task: %s", self._subscription_task)
             #await self.hub.ialarmmk.subscribe()
@@ -114,24 +115,25 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         lastRealUpdateStatus = data_in.get("LastRealUpdateStatus")
         if lastRealUpdateStatus is not None:
             self.hub.lastRealUpdateStatus = lastRealUpdateStatus
-
-        user_id = data_in.get("user_id")
-        self.hub.changed_by = user_id
-        _LOGGER.debug("user_id: %s", user_id)
-        '''if user_id is not None:
-            user_name = self.get_user_name(user_id)
-            self.hub.changed_by = user_name if user_name else "Sconosciuto"
-        '''
+        self.last_user_id = data_in.get("user_id")
+        _LOGGER.debug("user_id: %s", self.last_user_id)
         # Schedule the update
         self.hass.async_create_task(self.async_update_data())
+        self.hass.async_create_task(self._async_set_changed_by())
 
-
-    async def get_user_name(self, user_id):
-        user = await self.hass.auth.async_get_user(user_id)
-        if user:
-            return user.name
-        else:
-            return None  # Se l'utente non esiste o non è trovato
+    async def _async_set_changed_by(self) -> None:
+        #TODO devo migliorare come invocarlo.
+        """Set the changed_by attribute with the user's name based on user_id."""
+        user_name = "Sconosciuto"
+        try:
+            if self.last_user_id:  # Verifica se hai un user_id valido
+                user = await self.hass.auth.async_get_user(self.last_user_id)
+                if user:  # Verifica se l'utente esiste
+                    user_name = user.name  # Ottieni il nome dell'utente
+        except Exception as error:  # noqa: BLE001
+            _LOGGER.warning("Error during get user name for user_id '%s': %s", self.last_user_id, error)
+        self.changed_by = user_name  # Imposta il valore serializzabile
+        _LOGGER.debug("Set changed_by: %s", self.changed_by)
 
     async def async_update_data(self) -> None:
         """Update the data and notify about the new state."""
@@ -230,8 +232,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self, *args):
         """Gestisci la chiusura delle risorse quando Home Assistant si spegne."""
-        _LOGGER.info("Shutting down iAlarmMk custom component, and close the connections active...")
+        _LOGGER.info("Shutting down custom component, and close the connections active...")
         if self._subscription_task:
             self._subscription_task.cancel()
         self.hub.ialarmmk.ialarmmkClient.logout()
-        _LOGGER.info("Shutdown iAlarmMk custom component completed.")
+        _LOGGER.info("Shutdown custom component completed.")

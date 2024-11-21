@@ -1,7 +1,7 @@
 {
   "domain": "ialarm_mk2",
   "name": "iAlarm-MK Integration 2",
-  "version": "2024.11.20",
+  "version": "2024.11.22",
   "codeowners": [
     "@mistermax80"
   ],
