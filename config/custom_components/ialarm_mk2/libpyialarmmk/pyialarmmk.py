@@ -16,6 +16,7 @@
 
 import asyncio
 from collections import OrderedDict as OD
+import random
 import re
 import socket
 import threading
@@ -886,7 +887,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
     keepalive = 60
     timeout = 10
 
-    def __init__(self, host, port, uid, handler, loop, on_con_lost, logger=None):
+    def __init__(self, host, port, uid, handler, loop, on_con_lost, threadID, logger=None):
         if not callable(handler):
             raise AttributeError("handler is not a function")
         self.host = host
@@ -897,10 +898,11 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         cmd["Err"] = None
         xpath = "/Root/Pair/Push"
         self.mesg = self._create(xpath, cmd)
-        self._thread_sockets = dict()
+        #self._thread_sockets = dict()
         self.loop = loop
         self.on_con_lost = on_con_lost
         self.transport = None
+        self.threadID = threadID
         self.logger = logger
 
         # asyncore.dispatcher.__init__(self, map=self._thread_sockets)
@@ -914,7 +916,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         return self.handle_read(data)
 
     def connection_lost(self, exc):
-        self._print("iAlarmMkPushClient.connection_lost exc: "+str(exc))
+        self._print("iAlarmMkPushClient - connection_lost exception: "+str(exc))
         self._close()
 
     def __del__(self):
@@ -934,8 +936,11 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         return False
 
     def handle_connect(self):
-        threading.Timer(self.keepalive, self._keepalive).start()
-        pass
+        #threading.Timer(self.keepalive, self._keepalive).start()
+        timer = threading.Timer(self.keepalive, self._keepalive)
+        random_number = random.randint(100, 999)
+        timer.name = f"{self.threadID}-{random_number}"
+        timer.start()
 
     def handle_error(self):
         self._close()
@@ -948,16 +953,20 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             head = data[0:4]
 
             # Logging dell'header e della lunghezza dei dati ricevuti
-            self._print(f"iAlarmMkPushClient.handle_read - Header: {head}, Data Length: {len(data)}")
+            self._print(f"iAlarmMkPushClient - handle_read - Header: {head}, Data Length: {len(data)}")
 
             resp = None
 
             if head == b"%maI":
-                self._print("iAlarmMkPushClient.handle_read - Keepalive message received.")
-                threading.Timer(self.keepalive, self._keepalive).start()
+                self._print("iAlarmMkPushClient - handle_read - Keepalive message received.")
+                #threading.Timer(self.keepalive, self._keepalive).start()
+                timer = threading.Timer(self.keepalive, self._keepalive)
+                random_number = random.randint(100, 999)
+                timer.name = f"{self.threadID}-{random_number}"
+                timer.start()
 
             elif head == b"@ieM":
-                self._print("iAlarmMkPushClient.handle_read - Pairing message received.")
+                self._print("iAlarmMkPushClient - handle_read - Pairing message received.")
                 xpath = "/Root/Pair/Push"
                 resp = xmltodict.parse(
                     self._xor(data[16:-4]).decode(),
@@ -969,19 +978,19 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                 if self.push:
                     err = self._select(resp, "%s/Err" % xpath)
                     if err:
-                        self._print("iAlarmMkPushClient.handle_read - Pairing error detected, closing connection.")
+                        self._print("iAlarmMkPushClient - handle_read - Pairing error detected, closing connection.")
                         self._close()
                         raise PushClientError("Push subscription error")
                     else:
-                        self._print("iAlarmMkPushClient.handle_read - Device successfully paired.")
+                        self._print("iAlarmMkPushClient - handle_read - Device successfully paired.")
                 else:
-                    self._print("iAlarmMkPushClient.handle_read - No pairing information found.")
+                    self._print("iAlarmMkPushClient - handle_read - No pairing information found.")
                     xpath = "/Root/Host/Alarm"
-                    self._print(f"iAlarmMkPushClient.handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                    self._print(f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
                     self.handler(self._select(resp, xpath))
 
             elif head == b"@alA":
-                self._print("iAlarmMkPushClient.handle_read - Alarm message received.")
+                self._print("iAlarmMkPushClient - handle_read - Alarm message received.")
                 xpath = "/Root/Host/Alarm"
                 resp = xmltodict.parse(
                     self._xor(data[16:-4]).decode(),
@@ -989,11 +998,11 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                     dict_constructor=dict,
                     postprocessor=self._xmlread,
                 )
-                self._print(f"iAlarmMkPushClient.handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                self._print(f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
                 self.handler(self._select(resp, xpath))
 
             elif head == b"!lmX":
-                self._print("iAlarmMkPushClient.handle_read - Alternate alarm message received.")
+                self._print("iAlarmMkPushClient - handle_read - Alternate alarm message received.")
                 xpath = "/Root/Host/Alarm"
                 resp = xmltodict.parse(
                     data[16:-4],
@@ -1001,16 +1010,16 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                     dict_constructor=dict,
                     postprocessor=self._xmlread,
                 )
-                self._print(f"iAlarmMkPushClient.handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                self._print(f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
                 self.handler(self._select(resp, xpath))
 
             else:
-                self._print(f"iAlarmMkPushClient.handle_read - Unrecognized header: {head}, closing connection.")
+                self._print(f"iAlarmMkPushClient - handle_read - Unrecognized header: {head}, closing connection.")
                 self._close()
                 raise ResponseError("Response error")
 
         except Exception as e:
-            self._print(f"iAlarmMkPushClient.handle_read - Error: {str(e)}")
+            self._print(f"iAlarmMkPushClient - handle_read - Error: {str(e)}")
             raise
 
     def handle_write(self):
@@ -1038,7 +1047,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         mesg = b"%maI"
         self.transport.write(mesg)
         self.mesg = None
-        self._print("iAlarmMkPushClient._keepalive:"+str(mesg))
+        self._print("iAlarmMkPushClient - _keepalive, sent messagge:"+str(mesg))
 
     def _print(self, data):
         if self.logger is not None:
@@ -1046,46 +1055,37 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         else:
             print(str(data))
 
-
 def BOL(en):
     if en == True:
         return "BOL|T"
     else:
         return "BOL|F"
 
-
 def DTA(t):
     dta = time.strftime("%Y.%m.%d.%H.%M.%S", t)
     return "DTA,%d|%s" % (len(dta), dta)
 
-
 def PWD(text):
     return "PWD,%d|%s" % (len(text), text)
-
 
 def S32(val, pos=0):
     return "S32,%d,%d|%d" % (pos, pos, val)
 
-
 def MAC(mac):
     return "MAC,%d|%d" % (len(mac), mac)
-
 
 def IPA(ip):
     return "IPA,%d|%d" % (len(ip), ip)
 
-
 def STR(text):
     text = str(text)
     return "STR,%d|%s" % (len(text), text)
-
 
 def TYP(val, typ=[]):
     try:
         return "TYP,%s|%d" % (typ[val], val)
     except IndexError:
         return "TYP,NONE,|%d" % val
-
 
 Cid = {
     "1100": "Personal ambulance",

@@ -14,11 +14,14 @@
 
 import asyncio
 from datetime import datetime
+import json
+import threading
 from zoneinfo import ZoneInfo
 
-from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
-import json
 from homeassistant.core import HomeAssistant
+
+from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
+
 
 class iAlarmMkInterface:
     """Interface with pyialarmmk library."""
@@ -64,7 +67,7 @@ class iAlarmMkInterface:
         logger = None,
     ):
         '''Impostazione.'''
-        self.threadID = "iAlarmMK2-Thread"
+        self.threadID = "iAlarmMK2-ThreadID"
         self.host = host
         self.port = port
         self.uid = uid
@@ -77,49 +80,77 @@ class iAlarmMkInterface:
         self.callback_only_status = None
         self.hass: HomeAssistant = hass
 
+        self.client = None
+        self.transport = None
+
         self._get_status()
 
     def set_callback(self, callback, callback_only_status):
         '''set_callback.'''
         self.callback = callback
         self.callback_only_status = callback_only_status
-        
+
+    def _log_specific_threads(self):
+        threads = threading.enumerate()
+        specific_threads = [t for t in threads if t.name.startswith(self.threadID)]
+        self.logger.debug(f"Numbers of threads for'{self.threadID}': {len(specific_threads)}")  # noqa: G004
+        for thread in specific_threads:
+            self.logger.debug(f"Active thread: {thread.name}")  # noqa: G004
+
     async def subscribe(self):
-        '''Fuzione migliorata.'''
+        '''Funzione migliorata.'''
         disconnect_time = 60 * 5
 
         while True:
+            self._log_specific_threads()
             loop = asyncio.get_running_loop()
             on_con_lost = loop.create_future()
+
             try:
-                transport, protocol = await loop.create_connection(
-                    lambda: iAlarmMkPushClient(
+                # Se non esiste un client o il trasporto è chiuso, crea una nuova connessione
+                if self.client is None or self.transport is None or self.transport.is_closing():
+                    if self.transport:
+                        self.logger.debug("Closing existing transport.")
+                        self.transport.close()
+                        self.transport = None  # Resetta il trasporto
+
+                    self.client = iAlarmMkPushClient(
                         self.host,
                         self.port,
                         self.uid,
                         self.set_status,
                         loop,
                         on_con_lost,
+                        self.threadID,
                         self.logger,
-                    ),
-                    self.host,
-                    self.port,
-                )
-                self.logger.info("Connected to the server.")
+                    )
+                    self.transport, protocol = await loop.create_connection(
+                        lambda: self.client,
+                        self.host,
+                        self.port,
+                    )
+                    self.logger.info("Connected to the server.")
+
+                # Mantieni la connessione per `disconnect_time`
                 await asyncio.sleep(disconnect_time)
 
             except (ConnectionError, TimeoutError) as e:
                 self.logger.error(f"Connection error: {e}")
-                await asyncio.sleep(1)  # Attendi un secondo prima di ritentare
 
             except Exception as e:
                 self.logger.error(f"Unexpected error: {e}")
 
             finally:
-                if transport:
-                    transport.close()
-                    self.logger.info("Transport closed.")
-                await asyncio.sleep(1)  # Attendi un secondo prima di tentare di riconnettersi
+                # Chiudi il trasporto se il client segnala che la connessione è terminata
+                if on_con_lost.done():
+                    self.logger.info("Connection lost. Cleaning up...")
+                    if self.transport and not self.transport.is_closing():
+                        self.transport.close()
+                    self.client = None  # Resetta il client
+                    self.transport = None  # Resetta il trasporto
+
+                # Attendi prima di riconnetterti
+                await asyncio.sleep(1)
 
 
     def _get_status(self):
