@@ -11,8 +11,8 @@ All of this information is made available in Home Assistant, so it can be used i
 
 Currently, it is possible to:
 - Retrieve the alarm status
-- Send commands to the alarm: arm, night arm, disarm, cancel active alarm
-- View the status of sensors: open/closed for doors and windows
+- Send commands to the alarm: arm, night arm, custom by-pass arm, disarm, cancel active alarm
+- View the status of sensors: open/closed for doors and windows (and others)
 - Check the battery status of sensors: for all sensors
 - Check the bypass status: for all sensors
 - Check the connection status: for all sensors
