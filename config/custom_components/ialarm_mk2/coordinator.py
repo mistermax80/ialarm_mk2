@@ -36,6 +36,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
         #self.hub.ialarmmk.set_callback_only_status(self.callback_only_status)
         self.sensors:IAlarmmkSensor = []
+        self.num_read_ok: int = 0
+        self.num_read_ko: int = 0
+
 
     async def _async_setup(self):
         _LOGGER.info("Setup data updater...")
@@ -143,11 +146,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         _LOGGER.info("Fetching data...")
 
         if not self.last_update_success:
-            _LOGGER.info("Last update was not successful, waiting 5 seconds.")
-            await asyncio.sleep(5)
+            _LOGGER.warning("Last update was not successful, waiting 5 seconds.")
+            await asyncio.sleep(10)
 
         try:
-            async with timeout(15):
+            async with timeout(30):
                 await self.hass.async_add_executor_job(self._update_data)
 
             await self.async_update_data()
@@ -174,8 +177,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     status = self.hub.ialarmmk.ialarmmkClient.GetByWay()
                     _LOGGER.debug("Retrieve last sensors status.")
                     _LOGGER.debug("Status: %s", status)
+                    self.num_read_ok += 1
                     break  # Se il blocco riesce, esci dal ciclo
                 except Exception as e:
+                    self.num_read_ko += 1
                     _LOGGER.exception("Error during fetch data.")
                     self.hub.ialarmmk.ialarmmkClient.logout()
                     _LOGGER.info("After error, logout ok.")
@@ -183,10 +188,12 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     if attempts >= max_attempts:
                         _LOGGER.error("Failed after %d attempts", max_attempts)
                         raise UpdateFailed(e) from e
-                    _LOGGER.info("Retrying... Attempt %d of %d in 1 seconds.", attempts + 1, max_attempts)
-                    _LOGGER.debug("Waiting 1 second before next attempt.")
-                    time.sleep(1)
+                    _LOGGER.info("Retrying... Attempt %d of %d in 5 seconds.", attempts + 1, max_attempts)
+                    _LOGGER.debug("Waiting 5 second before next attempt.")
+                    time.sleep(5)
                     _LOGGER.debug("Finished waiting, retrying now.")
+                finally:
+                    _LOGGER.debug("Numbers of update ok: %s, ko: %s", self.num_read_ok, self.num_read_ko)
 
             # Inizializza un messaggio di log
             log_message = "\n"
@@ -225,7 +232,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             _LOGGER.debug(log_message)
 
         except ConnectionError as e:
-            _LOGGER.error("Error fetching data from iAlarm-MK: %s", e)
+            _LOGGER.error("Error fetching data: %s", e)
             raise UpdateFailed("Connection error") from e
 
     async def async_shutdown(self, *args):

@@ -143,6 +143,7 @@ class iAlarmMkClient:
         """Funzione ausiliaria per chiudere il socket in modo sicuro."""
         if self.sock:
             try:
+                self.sock.shutdown(socket.SHUT_RDWR)
                 self.sock.close()
             except Exception as e:
                 self._print(f"Error closing socket: {e}")
@@ -153,7 +154,7 @@ class iAlarmMkClient:
         self._print("Logout method called.")
         if self.sock is None:
             return
-
+        self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
         self.sock = None
 
@@ -751,6 +752,7 @@ class iAlarmMkClient:
         except socket.timeout:
             raise ConnectionError("Connection timed out")
         except OSError as e:
+            self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
             raise ConnectionError("Connection error")
         return xmltodict.parse(
