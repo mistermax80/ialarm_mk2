@@ -59,6 +59,7 @@ class iAlarmMkClient:
         self.port = port
         self.uid = uid
         self.pwd = pwd
+        self.token = None
         self.logger = logger
 
     def __del__(self):
@@ -102,7 +103,8 @@ class iAlarmMkClient:
                 cmd["Id"] = STR(self.uid)
                 cmd["Pwd"] = PWD(self.pwd)
                 cmd["Type"] = "TYP,ANDROID|0"
-                cmd["Token"] = STR(str(uuid.uuid4()))
+                self.token = uuid.uuid4()
+                cmd["Token"] = STR(str(self.token))
                 cmd["Action"] = "TYP,IN|0"
                 cmd["PemNum"] = "STR,5|26"
                 cmd["DevVersion"] = None
@@ -115,9 +117,10 @@ class iAlarmMkClient:
 
                 # Controllo degli errori nella risposta del server
                 if self.client["Err"]:
-                    self._print(f"Error during login to the server: {self.client['Err']}")
+                    self._print(f"Error during login to the server: {self.client['Err']}, token used is {self.token}")
                     self.close_socket()
                     raise ClientError("Login error")
+                self._print(f"Login ok, token used is {self.token}")
 
             except socket.timeout as e:
                 self._print(f"Connection timeout: {e}")
@@ -149,6 +152,8 @@ class iAlarmMkClient:
                 self._print(f"Error closing socket: {e}")
             finally:
                 self.sock = None
+                self._print(f"Closed socket with token: {self.token}")
+                self.token = None
 
     def logout(self):
         self._print("Logout method called.")
@@ -157,6 +162,8 @@ class iAlarmMkClient:
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
         self.sock = None
+        self._print(f"Logout socket with token: {self.token}")
+        self.token = None
 
     def GetAlarmStatus(self):
         cmd = OD()
