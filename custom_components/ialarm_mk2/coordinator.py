@@ -48,7 +48,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             # Registrazione listener di spegnimento
             self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
             # Start the subscription in the background
-            self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
+            if self.hub.ialarmmk.get_threads() < 1:
+                self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
             _LOGGER.debug("Task: %s", self._subscription_task)
             #await self.hub.ialarmmk.subscribe()
             #self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
@@ -172,6 +173,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
             while attempts < max_attempts:
                 try:
+                    if self.num_read_ok > 1000:
+                        _LOGGER.debug("Reset connection token.")
+                        self.hub.ialarmmk.ialarmmkClient.logout()
+                        self.num_read_ok = 0
+                        self.num_read_ko = 0
                     self.hub.ialarmmk.ialarmmkClient.login()
                     _LOGGER.debug("Login ok.")
                     status = self.hub.ialarmmk.ialarmmkClient.GetByWay()
@@ -240,5 +246,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         _LOGGER.info("Shutting down iAlarmMk custom component, and close the connections active...")
         if self._subscription_task:
             self._subscription_task.cancel()
+            self.hub.ialarmmk.cancel_subscription()
+            await self._subscription_task
         self.hub.ialarmmk.ialarmmkClient.logout()
         _LOGGER.info("Shutdown iAlarmMk custom component completed.")

@@ -82,6 +82,7 @@ class iAlarmMkInterface:
 
         self.client = None
         self.transport = None
+        self._cancelled = False
 
         self._get_status()
 
@@ -90,19 +91,26 @@ class iAlarmMkInterface:
         self.callback = callback
         self.callback_only_status = callback_only_status
 
-    def _log_specific_threads(self):
+    def get_threads(self) -> int:
+        '''Recupera il numero di threads attivi.'''
         threads = threading.enumerate()
         specific_threads = [t for t in threads if t.name.startswith(self.threadID)]
-        self.logger.debug(f"Numbers of threads for'{self.threadID}': {len(specific_threads)}")  # noqa: G004
         for thread in specific_threads:
             self.logger.debug(f"Active thread: {thread.name}")  # noqa: G004
+        return len(specific_threads)
 
     async def subscribe(self):
         '''Funzione migliorata.'''
         disconnect_time = 60 * 5
 
         while True:
-            self._log_specific_threads()
+            # Controlla se il task è stato cancellato prima di eseguire altre operazioni
+            if self._cancelled:
+                self.logger.info("Subscription task cancellato.")
+                break
+
+            num_treads = self.get_threads()
+            self.logger.debug(f"Numbers of threads for '{self.threadID}': {num_treads}")  # noqa: G004
             loop = asyncio.get_running_loop()
             on_con_lost = loop.create_future()
 
@@ -152,6 +160,9 @@ class iAlarmMkInterface:
                 # Attendi prima di riconnetterti
                 await asyncio.sleep(1)
 
+    def cancel_subscription(self):
+        '''Metodo per cancellare la subscription.'''
+        self._cancelled = True  # Imposta il flag di cancellazione
 
     def _get_status(self):
         self.logger.debug("Retrieving DevStatus...")
@@ -181,7 +192,7 @@ class iAlarmMkInterface:
             1134: 4, 1137: 4,
             3456: 8
         }
-        
+
         self.status = status_map.get(cid, data_event_received.get("status",self.status))
         self.logger.debug("Real status updated to: %s(%s)", self.status_dict.get(self.status),self.status)
 
