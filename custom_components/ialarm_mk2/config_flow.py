@@ -8,7 +8,13 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_SCAN_INTERVAL,
+    CONF_USERNAME,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
@@ -17,19 +23,28 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+defaults = {
+    CONF_HOST: ipyialarmmk.iAlarmMkInterface.IALARMMK_P2P_DEFAULT_HOST,
+    CONF_PORT: ipyialarmmk.iAlarmMkInterface.IALARMMK_P2P_DEFAULT_PORT,
+    CONF_USERNAME: "<CABxxxxxx>",
+    CONF_PASSWORD: "<password>",
+    CONF_SCAN_INTERVAL: 60
+}
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST, default=ipyialarmmk.iAlarmMkInterface.IALARMMK_P2P_DEFAULT_HOST): str,
-        vol.Required(CONF_PORT, default=ipyialarmmk.iAlarmMkInterface.IALARMMK_P2P_DEFAULT_PORT): int,
-        vol.Required(CONF_USERNAME, default="<CABxxxxxx>"): str,
-        vol.Required(CONF_PASSWORD, default="<password>"): str,
-    }
-)
+            {
+                vol.Required(CONF_HOST, default=defaults[CONF_HOST]): str,
+                vol.Required(CONF_PORT, default=defaults[CONF_PORT]): int,
+                vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): str,
+                vol.Required(CONF_PASSWORD, default=defaults[CONF_PASSWORD]): str,
+                vol.Required(CONF_SCAN_INTERVAL, default=defaults[CONF_SCAN_INTERVAL]): int,
+            }
+        )
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
 
-    hub = IAlarmMkHub(hass, data[CONF_HOST], data[CONF_PORT], data[CONF_USERNAME], data[CONF_PASSWORD])
+    hub = IAlarmMkHub(hass, data[CONF_HOST], data[CONF_PORT], data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_SCAN_INTERVAL])
 
     if not await hub.validate():
         raise InvalidAuth
@@ -46,7 +61,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for iAlarm-MK Integration 2."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -70,6 +85,48 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
+        """Handle the reconfigure step."""
+        errors: dict[str, str] = {}
+
+        existing_entry = self.context.get("entry")
+
+        if not existing_entry:
+            entries = self.hass.config_entries.async_entries(DOMAIN)
+            existing_entry = entries[0] if entries else None
+
+        if existing_entry:
+            defaults.update(existing_entry.data)
+
+        STEP_RECONFIGURE_DATA_SCHEMA = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=defaults[CONF_HOST]): str,
+                vol.Required(CONF_PORT, default=defaults[CONF_PORT]): int,
+                vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): str,
+                vol.Required(CONF_PASSWORD, default=defaults[CONF_PASSWORD]): str,
+                vol.Required(CONF_SCAN_INTERVAL, default=defaults[CONF_SCAN_INTERVAL]): int,
+            }
+        )
+
+        if user_input is not None:
+            try:
+                await validate_input(self.hass, user_input)
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception:
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
+            else:
+                self.hass.config_entries.async_update_entry(existing_entry, data=user_input)
+                return self.async_abort(reason="reconfigured")
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=STEP_RECONFIGURE_DATA_SCHEMA,
+            errors=errors,
+        )
 
 class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
