@@ -13,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 class IAlarmMkHub:
     """Gestisce la connessione con iAlarm-MK."""
 
-    def __init__(self, hass: HomeAssistant, host: str, port: int, username: str, password: str) -> None:
+    def __init__(self, hass: HomeAssistant, host: str, port: int, username: str, password: str, scan_interval: int) -> None:
         """Inizializza la connessione con iAlarm-MK."""
         _LOGGER.info("Initializing iAlarmMkHub")
         self.hass: HomeAssistant = hass
@@ -21,6 +21,7 @@ class IAlarmMkHub:
         self.port: int = port
         self.username: str = username
         self.password: str = password
+        self.scan_interval: int = scan_interval
         self.mac: str = None
         self.name: str = None
         self.state: int = None

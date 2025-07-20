@@ -29,7 +29,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             _LOGGER,
             name=DOMAIN,
             #update_interval=SCAN_INTERVAL,
-            update_interval=timedelta(seconds=60),
+            update_interval=timedelta(seconds=hub.scan_interval),
         )
         self.hub: IAlarmMkHub = hub
         self._subscription_task = None
@@ -131,11 +131,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
 
     async def get_user_name(self, user_id):
+        """get_user_name."""
         user = await self.hass.auth.async_get_user(user_id)
         if user:
             return user.name
-        else:
-            return None  # Se l'utente non esiste o non è trovato
+        return None  # Se l'utente non esiste o non è trovato
 
     async def async_update_data(self) -> None:
         """Update the data and notify about the new state."""
