@@ -26,7 +26,7 @@ PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.ALARM_CONTROL_PANE
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
-    _LOGGER.info("Set up iAlarm-MK 2 Integration from a config entry...")
+    _LOGGER.info("Set up %s Integration from a config entry...", DOMAIN)
 
     entry.async_on_unload(entry.add_update_listener(async_update_entry))
 
@@ -47,12 +47,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     return True
 
-async def async_update_entry(hass, entry):
+async def async_update_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Gestisce la riconfigurazione."""
+    _LOGGER.info("Update %s Integration from a config entry...", DOMAIN)
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    _LOGGER.info("Unload %s Integration from a config entry...", DOMAIN)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
