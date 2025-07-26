@@ -1,6 +1,8 @@
 """Interfaces with iAlarmMk control panels."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityFeature,
@@ -15,6 +17,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
 from .coordinator import iAlarmMk2Coordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 IALARMMK_TO_HASS = {
     ipyialarmmk.iAlarmMkInterface.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
@@ -61,7 +65,7 @@ class iAlarmMkPanel(
     @property
     def alarm_state(self) -> str | None:
         """Return the state of the device."""
-        return IALARMMK_TO_HASS.get(self.coordinator.hub.state)
+        return IALARMMK_TO_HASS.get(self.coordinator.data.alarm_data.state)
 
     @property
     def changed_by(self) -> str | None:

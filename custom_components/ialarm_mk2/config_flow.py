@@ -7,6 +7,7 @@ from typing import Any
 
 import voluptuous as vol
 
+from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import (
     CONF_HOST,
@@ -62,6 +63,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for iAlarm-MK Integration 2."""
 
     VERSION = 2
+    MINOR_VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -71,6 +73,11 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await validate_input(self.hass, user_input)
+
+                await self.async_set_unique_id(info["title"])
+                self._abort_if_unique_id_configured()
+            except data_entry_flow.AbortFlow:
+                return self.async_abort(reason="already_configured")
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -102,7 +109,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_HOST, default=defaults[CONF_HOST]): str,
                 vol.Required(CONF_PORT, default=defaults[CONF_PORT]): int,
-                vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): str,
+                #vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): str,
                 vol.Required(CONF_PASSWORD, default=defaults[CONF_PASSWORD]): str,
                 vol.Required(CONF_SCAN_INTERVAL, default=defaults[CONF_SCAN_INTERVAL]): int,
             }

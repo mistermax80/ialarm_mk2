@@ -1,6 +1,7 @@
 """Componente per porte e finestre."""
 
 import logging
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -25,7 +26,8 @@ async def async_setup_entry(
     """Set up sensors based on a config entry."""
     _LOGGER.info("Set up sensors based on a config entry.")
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(coordinator.sensors,True)
+    if hasattr(coordinator, "sensors"):
+        async_add_entities(coordinator.sensors,True)
     _LOGGER.debug(coordinator.sensors)
 
 class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
@@ -44,19 +46,16 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_device_info = device
-        self.hass = coordinator.hass
         self._attr_unique_id = unique_id
-        self.name = name
-        self.entity_id = entity_id
-        self.index: int = index
-        self._attr_is_on = None
-        self._attr_state = None
+        self._attr_name = name
+        self._attr_entity_id = entity_id
+        self._attr_index: int = index
         #Types: 0: Disabilitata, 1: Ritardata, 2: Perimetrale, 3:Interna, 4: Emergenza, 5: Attiva 24 ore, 6: Incendio, 7: Chiavi
         match zone_type:
             case 1 | 2:
-                if(self.name.lower().find("port")>0):
+                if "port" in name.lower():
                     self._attr_device_class = BinarySensorDeviceClass.DOOR
-                elif(self.name.lower().find("intern")>0):
+                elif("intern" in name.lower()):
                     self._attr_device_class = BinarySensorDeviceClass.MOTION
                 else:
                     self._attr_device_class = BinarySensorDeviceClass.WINDOW
@@ -65,20 +64,31 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             case 4 | 5:
                 self._attr_device_class = BinarySensorDeviceClass.PROBLEM
             case 6:
-                if(self.name.lower().find("gas")>0):
+                if("gas" in name.lower()):
                     self._attr_device_class = BinarySensorDeviceClass.GAS
                 else:
                     self._attr_device_class = BinarySensorDeviceClass.SMOKE
             case 0 | _:
                 self._attr_device_class = BinarySensorDeviceClass.OPENING
-        self._low_battery:bool = None
-        self._loss:bool = None
-        self._bypass:bool = None
-        self._last_check = None
+        self._attr_is_on = None
+        self._attr_low_battery:bool = None
+        self._attr_loss:bool = None
+        self._attr_bypass:bool = None
+        self._attr_last_check = None
 
     def set_attr_is_on(self, state:bool):
         '''set_attr_is_on.'''
         self._attr_is_on = state
+
+    @property
+    def is_on(self) -> bool | None:
+        '''is_on.'''
+        return self._attr_is_on
+
+    @property
+    def index(self) -> bool | None:
+        '''is_on.'''
+        return self._attr_index
 
     def set_state(self, state):
         '''set_state.'''
@@ -92,7 +102,7 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         self._last_check = last_check
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Ritorna gli attributi personalizzati dinamici."""
         return {
             "low_battery": self._low_battery,
@@ -100,20 +110,3 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             "bypass": self._bypass,
             "last_check": self._last_check,
         }
-
-    '''
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        _LOGGER.info("Handle updated data from the coordinator.")
-        #state = self.coordinator.sensors[self.index].get("state")
-        _LOGGER.info(f"{self.name} {self.index} {self.coordinator.sensors[self.index]}")
-        #self._attr_is_on = self.coordinator.data[self.index].get("state")
-        self.async_write_ha_state()
-
-    def update(self) -> None:
-        """Fetch new state data for the sensor."""
-        _LOGGER.info("Fetch new state data for the sensor.")
-        self._attr_is_on = False
-        #await self.coordinator.async_request_refresh()
-    '''
