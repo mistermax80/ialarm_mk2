@@ -28,9 +28,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
     _LOGGER.info("Set up %s Integration from a config entry...", DOMAIN)
 
+    # Assicuriamoci che unique_id sia sempre settato (migrazione "al volo" in setup)
+    if entry.unique_id is None:
+        unique_id = entry.data.get(CONF_USERNAME)
+        if unique_id:
+            _LOGGER.debug("Setting unique_id for entry %s: %s", entry.entry_id, unique_id)
+            hass.config_entries.async_update_entry(entry, unique_id=unique_id)
+
     entry.async_on_unload(entry.add_update_listener(async_update_entry))
 
-    hub: IAlarmMkHub = IAlarmMkHub(hass, entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], entry.data[CONF_SCAN_INTERVAL])
+    hub: IAlarmMkHub = IAlarmMkHub(
+        hass,
+        entry.data[CONF_HOST],
+        entry.data[CONF_PORT],
+        entry.data[CONF_USERNAME],
+        entry.data[CONF_PASSWORD],
+        entry.data[CONF_SCAN_INTERVAL],
+    )
 
     try:
         async with timeout(10):
@@ -67,5 +81,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Aggiorna la versione a 2 e salva tutto
         hass.config_entries.async_update_entry(entry, data=data, version=2)
-    return True
 
+    # Anche qui puoi eventualmente settare unique_id se non presente
+    if entry.unique_id is None:
+        unique_id = entry.data.get(CONF_USERNAME)
+        if unique_id:
+            _LOGGER.debug("Setting unique_id for migrated entry %s: %s", entry.entry_id, unique_id)
+            hass.config_entries.async_update_entry(entry, unique_id=unique_id)
+
+    return True

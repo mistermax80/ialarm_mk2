@@ -7,13 +7,11 @@
   ],
   "loggers": ["ialarm-mk2"],
   "config_flow": true,
-  "single_config_entry": true,
+  "config_entry": true,
   "dependencies": [],
   "documentation": "https://github.com/mistermax80/ialarm_mk2",
   "issue_tracker": "https://github.com/mistermax80/ialarm_mk2/issues",
-  "homekit": {},
-  "iot_class": "cloud_polling",
-  "requirements": ["lxml"],
-  "ssdp": [],
-  "zeroconf": []
+  "iot_class": "cloud_push",
+  "integration_type": "hub",
+  "requirements": ["lxml"]
 }
