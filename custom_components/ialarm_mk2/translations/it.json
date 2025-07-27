@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Indirizzo IP",
+          "port": "Porta",
+          "username": "Username",
+          "password": "Password",
+          "scan_interval": "Intervallo scansione"
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Indirizzo IP",
+          "port": "Porta",
+          "username": "Username",
+          "password": "Password",
+          "scan_interval": "Intervallo scansione (sec.)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi",
+      "invalid_auth": "Autenticazione non valida",
+      "unknown": "Errore sconosciuto"
+    },
+    "abort": {
+      "already_configured": "Dispositivo già configurato"
+    }
+  }
+}

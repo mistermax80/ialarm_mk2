@@ -63,7 +63,6 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for iAlarm-MK Integration 2."""
 
     VERSION = 2
-    MINOR_VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
