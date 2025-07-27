@@ -25,10 +25,10 @@ class SensorData:
     index: int
     name: str
     is_on: bool
-    #low_battery: bool
-    #loss: bool
-    #bypass: bool
-    #last_update: datetime
+    # low_battery: bool
+    # loss: bool
+    # bypass: bool
+    # last_update: datetime
 
 
 @dataclass
@@ -286,35 +286,39 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 sensor: IAlarmmkSensor
 
                 sensorData: SensorData = SensorData(
-                    index=sensor.index,
-                    name=sensor.name,
-                    is_on=None
+                    index=sensor.index, name=sensor.name, is_on=None
                 )
                 state: int = status[int(sensor.index)]
 
                 log_message += f"\t- {sensor.name}: state {state}\n"
 
-                # Verifica se la zona è in uso e in errore
-                if (
+                # Verifica se la zona è persa
+                if state & self.hub.ialarmmk.ZONE_LOSS:
+                    # sensor.set_attr_is_on(None)
+                    sensorData.is_on = None
+                    # sensor.set_state(STATE_UNAVAILABLE)
+                    log_message += f"\t\t(Persa) {bin(state)} \n"
+                # Verifica se la zona non è utilizzata
+                elif state & self.hub.ialarmmk.ZONE_NOT_USED:
+                    # sensor.set_attr_is_on(None)
+                    sensorData.is_on = None
+                    # sensor.set_state(STATE_UNAVAILABLE)
+                    log_message += f"\t\t(Non Usato) {bin(state)} \n"
+                # Verifica se la zona è in uso e in fault (aperta)
+                elif (
                     state & self.hub.ialarmmk.ZONE_IN_USE
                     and state & self.hub.ialarmmk.ZONE_FAULT
                 ):
-                    #sensor.set_attr_is_on(True)
+                    # sensor.set_attr_is_on(True)
                     sensorData.is_on = True
                     log_message += f"\t\t(Aperto) {bin(state)} \n"
                 # Verifica se la zona è solo in uso
                 elif state & self.hub.ialarmmk.ZONE_IN_USE:
-                    #sensor.set_attr_is_on(False)
+                    # sensor.set_attr_is_on(False)
                     sensorData.is_on = False
                     log_message += f"\t\t(Chiuso) {bin(state)} \n"
-                # Verifica se la zona non è utilizzata
-                elif state == self.hub.ialarmmk.ZONE_NOT_USED:
-                    #sensor.set_attr_is_on(None)
-                    sensorData.is_on = None
-                    #sensor.set_state(STATE_UNAVAILABLE)
-                    log_message += f"\t\t(Non Usato) {bin(state)} \n"
                 else:
-                    #sensor.set_attr_is_on(None)
+                    # sensor.set_attr_is_on(None)
                     sensorData.is_on = None
                     _LOGGER.warning(
                         "%s: state (Sconosciuto) %s \n", sensor.name, bin(state)

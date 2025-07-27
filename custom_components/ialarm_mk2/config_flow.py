@@ -108,15 +108,20 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_HOST, default=defaults[CONF_HOST]): str,
                 vol.Required(CONF_PORT, default=defaults[CONF_PORT]): int,
-                #vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): str,
                 vol.Required(CONF_PASSWORD, default=defaults[CONF_PASSWORD]): str,
                 vol.Required(CONF_SCAN_INTERVAL, default=defaults[CONF_SCAN_INTERVAL]): int,
             }
         )
 
         if user_input is not None:
+            # Prendiamo username dall'entry esistente
+            username = existing_entry.data.get(CONF_USERNAME, defaults[CONF_USERNAME]) if existing_entry else defaults[CONF_USERNAME]
+
+            # Ricostruiamo il dict dati completo con username
+            full_data = dict(user_input)
+            full_data[CONF_USERNAME] = username
             try:
-                await validate_input(self.hass, user_input)
+                await validate_input(self.hass, full_data)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -125,7 +130,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                self.hass.config_entries.async_update_entry(existing_entry, data=user_input)
+                self.hass.config_entries.async_update_entry(existing_entry, data=full_data)
                 return self.async_abort(reason="reconfigured")
 
         return self.async_show_form(
