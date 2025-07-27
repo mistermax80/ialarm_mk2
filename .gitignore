@@ -1,6 +1,19 @@
-# Ignora tutto
+# Ignora tutto nella root (file e cartelle)
 /*
 
-# Ma NON ignorare questa cartella (e il suo contenuto)
+# Riammetti tutte le cartelle nella root (necessario per poter riammettere file dentro)
+/*/
+
+# Riammetti i file essenziali nella root
+!README.md
+!LICENSE
+!hacs.json
+
+# Riammetti la cartella custom_components e tutto il suo contenuto
+!custom_components/
 !custom_components/ialarm_mk2/
 !custom_components/ialarm_mk2/**
+
+# Ignora tutti i file pyc e le cartelle __pycache__
+*.pyc
+__pycache__/
