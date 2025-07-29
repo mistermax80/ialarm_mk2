@@ -10,7 +10,6 @@
 !hacs.json
 
 # Riammetti la cartella custom_components e tutto il suo contenuto
-!custom_components/
 !custom_components/ialarm_mk2/
 !custom_components/ialarm_mk2/**
 

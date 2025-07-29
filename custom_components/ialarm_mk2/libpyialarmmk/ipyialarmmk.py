@@ -77,7 +77,6 @@ class iAlarmMkInterface:
         self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd, self.logger)
         self.status = None
         self.callback = None
-        self.callback_only_status = None
         self.hass: HomeAssistant = hass
 
         self.client = None
@@ -86,10 +85,9 @@ class iAlarmMkInterface:
 
         self._get_status()
 
-    def set_callback(self, callback, callback_only_status):
+    def set_callback(self, callback):
         '''set_callback.'''
         self.callback = callback
-        self.callback_only_status = callback_only_status
 
     def get_threads(self) -> int:
         '''Recupera il numero di threads attivi.'''
@@ -223,7 +221,7 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(3)
-            self._set_status(self.DISARMED)
+            #self._set_status(self.DISARMED)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error canceling alarm: %s", e)
@@ -232,7 +230,7 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(2)
-            self._set_status(self.ARMED_STAY, user_id)
+            #self._set_status(self.ARMED_STAY, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in stay mode: %s", e)
@@ -241,7 +239,7 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(1)
-            self._set_status(self.DISARMED, user_id)
+            #self._set_status(self.DISARMED, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error disarming alarm: %s", e)
@@ -250,7 +248,7 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(0)
-            self._set_status(self.ALARM_ARMING, user_id)
+            #self._set_status(self.ALARM_ARMING, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in away mode: %s", e)
@@ -259,32 +257,10 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(8)
-            self._set_status(self.ARMED_PARTIAL, user_id)
+            #self._set_status(self.ARMED_PARTIAL, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             self.logger.error("Error arming alarm in partial mode: %s", e)
-
-    def _set_status(self, status, user_id: str | None) -> None:
-        if self.hass is not None:
-            try:
-                result = asyncio.run_coroutine_threadsafe(
-                    self.async_set_status(status, user_id), self.hass.loop
-                ).result()
-                # Puoi anche loggare il risultato se necessario
-                self.logger.debug("Status updated successfully: %s", status)
-            except Exception as e:
-                # Gestisci l'eccezione e logga l'errore
-                self.logger.error("Error updating status: %s", e)
-
-    async def async_set_status(self, status, user_id: str | None) -> None:
-        tz = ZoneInfo(self.hass.config.time_zone)
-        current_time = datetime.now(tz)
-        data = {
-            'Status': status,
-            'LastRealUpdateStatus': current_time,
-            'user_id': user_id
-        }
-        self.callback_only_status(data)
 
     def get_mac(self) -> dict:
         self.ialarmmkClient.login()
