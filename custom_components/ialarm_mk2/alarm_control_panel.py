@@ -34,6 +34,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up a iAlarm-MK alarm control panel based on a config entry."""
+    _LOGGER.info("Set up sensors based on a config entry.")
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([iAlarmMkPanel(coordinator)])
 
@@ -65,6 +66,8 @@ class iAlarmMkPanel(
     @property
     def alarm_state(self) -> str | None:
         """Return the state of the device."""
+        if self.coordinator.data.alarm_data.temporary_state:
+            return self.coordinator.data.alarm_data.temporary_state
         return IALARMMK_TO_HASS.get(self.coordinator.data.alarm_data.state)
 
     @property
@@ -81,18 +84,26 @@ class iAlarmMkPanel(
 
     def alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
+        self.coordinator.data.alarm_data.temporary_state = AlarmControlPanelState.DISARMING
+        self.hass.async_add_job(self.async_write_ha_state)
         self.coordinator.hub.ialarmmk.disarm(self._retrive_user_id())
 
     def alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command."""
+        self.coordinator.data.alarm_data.temporary_state = AlarmControlPanelState.ARMING
+        self.hass.async_add_job(self.async_write_ha_state)
         self.coordinator.hub.ialarmmk.arm_stay(self._retrive_user_id())
 
     def alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command."""
+        self.coordinator.data.alarm_data.temporary_state = AlarmControlPanelState.ARMING
+        self.hass.async_add_job(self.async_write_ha_state)
         self.coordinator.hub.ialarmmk.arm_away(self._retrive_user_id())
 
     def alarm_arm_custom_bypass(self, code: str | None = None) -> None:
         """Send arm away command."""
+        self.coordinator.data.alarm_data.temporary_state = AlarmControlPanelState.ARMING
+        self.hass.async_add_job(self.async_write_ha_state)
         self.coordinator.hub.ialarmmk.arm_partial(self._retrive_user_id())
 
     def _retrive_user_id(self) -> str:
@@ -105,5 +116,3 @@ class iAlarmMkPanel(
         except AttributeError as e:
             self.logger.error("Error retrieving user_id: %s", e)
         return user_id
-
-

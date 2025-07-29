@@ -12,9 +12,10 @@ from homeassistant.const import (
     CONF_PORT,
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
+    EVENT_HOMEASSISTANT_STOP,
     Platform,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
@@ -38,8 +39,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             hass.config_entries.async_update_entry(entry, unique_id=unique_id)
 
-    entry.async_on_unload(entry.add_update_listener(async_update_entry))
-
     hub: IAlarmMkHub = IAlarmMkHub(
         hass,
         entry.data[CONF_HOST],
@@ -56,6 +55,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady from ex
 
     coordinator: iAlarmMk2Coordinator = iAlarmMk2Coordinator(hass, hub)
+
+    async def _async_on_hass_stop(_: Event) -> None:
+        """Close connection when hass stops."""
+        #await iAlarmMk2Coordinator.async_shutdown()
+        await coordinator.async_shutdown()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_on_hass_stop)
+    )
+    entry.async_on_unload(
+        entry.add_update_listener(async_update_entry)
+    )
+
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

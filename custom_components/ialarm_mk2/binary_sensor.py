@@ -35,6 +35,9 @@ async def async_setup_entry(
         [s.name for s in coordinator.sensors],
     )
 
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    return await hass.data[DOMAIN].async_unload_entry(entry.entry_id)
 
 class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     """Representation of a iAlarm Status Sensor."""
