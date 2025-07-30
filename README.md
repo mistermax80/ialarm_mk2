@@ -1,5 +1,6 @@
 # Home Assistant custom integration for iAlarm MK
 
+[![HACS][hacs-shield]][hacs]
 [![Release][releases-shield]][releases]
 [![Downloads][downloads-shield]][downloads]
 [![Stars][stars-shield]][stars]
@@ -41,6 +42,9 @@ Special thanks to:
 - https://github.com/RyuzakiKK/pyialarm
 - https://github.com/bigmoby/pymeianlike
 - https://github.com/maxill1/ialarm-mqtt
+
+[hacs-shield]: https://img.shields.io/badge/HACS-Available-brightgreen?style=for-the-badge
+[hacs]: https://hacs.xyz/repository/github/mistermax80/ialarm_mk2
 
 [releases-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?include_prereleases&style=for-the-badge
 [releases]: https://github.com/mistermax80/ialarm_mk2/releases
