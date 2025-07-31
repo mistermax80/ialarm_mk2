@@ -215,12 +215,13 @@ class iAlarmMkInterface:
             #self.logger.debug("Invoke callback to passing event data: %s", event_data)
             self.callback(event_data)
         else:
-            self.logger.debug("Callback is None")
+            self.logger.warning("Callback is None")
 
     def cancel_alarm(self) -> None:
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(3)
+            ret_value = self.ialarmmkClient.SetAlarmStatus(self.CANCEL)
+            self.logger.debug("Return value: %s", ret_value)
             #self._set_status(self.DISARMED)
             self.ialarmmkClient.logout()
         except Exception as e:
@@ -229,7 +230,8 @@ class iAlarmMkInterface:
     def arm_stay(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(2)
+            ret_value = self.ialarmmkClient.SetAlarmStatus(self.ARMED_STAY)
+            self.logger.debug("Return value: %s", ret_value)
             #self._set_status(self.ARMED_STAY, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
@@ -238,7 +240,8 @@ class iAlarmMkInterface:
     def disarm(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(1)
+            ret_value = self.ialarmmkClient.SetAlarmStatus(self.DISARMED)
+            self.logger.debug("Return value: %s", ret_value)
             #self._set_status(self.DISARMED, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
@@ -247,7 +250,8 @@ class iAlarmMkInterface:
     def arm_away(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(0)
+            ret_value = self.ialarmmkClient.SetAlarmStatus(self.ARMED_AWAY)
+            self.logger.debug("Return value: %s", ret_value)
             #self._set_status(self.ALARM_ARMING, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
@@ -256,7 +260,8 @@ class iAlarmMkInterface:
     def arm_partial(self, user_id: str | None) -> None:
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(8)
+            ret_value = self.ialarmmkClient.SetAlarmStatus(self.ARMED_PARTIAL)
+            self.logger.debug("Return value: %s", ret_value)
             #self._set_status(self.ARMED_PARTIAL, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:

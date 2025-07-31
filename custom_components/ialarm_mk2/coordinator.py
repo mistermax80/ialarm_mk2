@@ -151,13 +151,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         if lastRealUpdateStatus is not None:
             self.hub.lastRealUpdateStatus = lastRealUpdateStatus
 
-        # Evento personalizzato con nome "ialarm_mk_event"
-        self.hass.bus.async_fire("ialarm_mk2_event", event_data)
-
         self.async_update_listeners()  # notifica le entità senza interferire col polling
 
-        # Schedule the update
-        #self.hass.async_create_task(self.async_update_data())
+        # Evento personalizzato con nome "ialarm_mk_event"
+        self.hass.bus.async_fire("ialarm_mk2_event", event_data)
 
     async def get_user_name(self, user_id):
         """get_user_name."""
@@ -184,13 +181,15 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             await asyncio.sleep(10)
         try:
             async with timeout(30):
-                return await self.hass.async_add_executor_job(self._update_data)
+                return await self.hass.async_add_executor_job(self._fetch_device_data)
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             raise UpdateFailed(error) from error
 
-    def _update_data(self) -> Data:
+    def _fetch_device_data(self) -> Data:
         """Fetch data from iAlarm-MK via synchronous functions."""
+
+        _LOGGER.debug("Coordinator data: %s", self.data)
 
         alarm_data = AlarmData(0)
         # Lista vuota di sensori, se ancora non disponibili
@@ -198,15 +197,20 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         # Inizializzazione completa dell'oggetto Data
         return_data = Data(alarm_data, sensors_data)
 
-        _LOGGER.debug("Coordinator data: %s", self.data)
         try:
+            #TODO da isolare in un metodo a parte e chiamabile da _async_update_data
+            '''
             return_data.alarm_data.state = self.hub.ialarmmk.get_status()
             return_data.alarm_data.temporary_state = None  # Reset
+
+            status_desc = self.hub.ialarmmk.status_dict.get(return_data.alarm_data.state, "Unknown")
+
             _LOGGER.debug(
-                "Updating internal state: %s(%s)",
-                self.hub.ialarmmk.status_dict.get(return_data.alarm_data.state),
+                "Fetched status from alarm: %s (%s) — resetting temporary_state",
+                status_desc,
                 return_data.alarm_data.state,
             )
+            '''
 
             tz = ZoneInfo(self.hass.config.time_zone)
             current_time = datetime.now(tz)
