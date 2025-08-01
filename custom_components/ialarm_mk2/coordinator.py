@@ -69,6 +69,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         sensors_data: list[SensorData] = []
         # Inizializzazione completa dell'oggetto Data
         self.data = Data(alarm_data=alarm_data, sensors_data=sensors_data)
+
         self.num_read_ok: int = 0
         self.num_read_ko: int = 0
 
@@ -91,6 +92,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
             self.hub.ialarmmk.ialarmmkClient.login()
             _LOGGER.debug("Login OK.")
+            realAlarmStatus = self.hub.ialarmmk.ialarmmkClient.GetAlarmStatus()
+            _LOGGER.debug("Sync real status OK. %s", realAlarmStatus)
+            self.data.alarm_data.state = realAlarmStatus['DevStatus']
+            _LOGGER.debug("Data: %s", self.data)
             idsSensors = self.hub.ialarmmk.ialarmmkClient.GetSensor()
             _LOGGER.debug("Retrieve sensors list OK.")
             zones = self.hub.ialarmmk.ialarmmkClient.GetZone()

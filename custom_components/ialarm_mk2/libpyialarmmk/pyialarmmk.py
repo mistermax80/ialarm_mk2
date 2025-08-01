@@ -122,25 +122,25 @@ class iAlarmMkClient:
                     raise ClientError("Login error")
                 self._print(f"Login ok, token used is {self.token}")
 
-            except socket.timeout as e:
+            except TimeoutError as e:
                 self._print(f"Connection timeout: {e}")
                 self.close_socket()
-                raise ConnectionError("Connection error: timeout")
+                raise ConnectionError("Connection error: timeout") from e
 
             except ConnectionRefusedError as e:
                 self._print(f"Connection refused by the server: {e}")
                 self.close_socket()
-                raise ConnectionError("Connection error: connection refused")
+                raise ConnectionError("Connection error: connection refused") from e
 
-            except socket.error as e:
+            except OSError as e:
                 self._print(f"Network error: {e}")
                 self.close_socket()
-                raise ConnectionError("Connection error: network error")
+                raise ConnectionError("Connection error: network error") from e
 
             except Exception as e:
                 self._print(f"Unexpected error during login: {e}")
                 self.close_socket()
-                raise ClientError("Unexpected error during login")
+                raise ClientError("Unexpected error during login") from e
 
     def close_socket(self):
         """Funzione ausiliaria per chiudere il socket in modo sicuro."""
@@ -581,7 +581,7 @@ class iAlarmMkClient:
     def SetRfid(self, pos, code, typ, msg):
         cmd = OD()
         cmd["Pos"] = S32(pos, 1)
-        cmd["Type"] = S32(typ, ["NO", "DS", "HS", "DM" "HM", "DC"])
+        cmd["Type"] = S32(typ, ["NO", "DS", "HS", "DM", "HM", "DC"])
         cmd["Code"] = STR(code)
         cmd["Msg"] = STR(msg)
         cmd["Err"] = None
@@ -589,7 +589,7 @@ class iAlarmMkClient:
         return self._(xpath, cmd)
 
     def SetRemote(self, pos, code):
-        cmd = OD()  #
+        cmd = OD()
         cmd["Pos"] = S32(pos, 1)
         cmd["Code"] = STR(code)
         cmd["Err"] = None
@@ -739,35 +739,51 @@ class iAlarmMkClient:
         return l
 
     def _send(self, root):
-        xml: str = etree.tostring(self._convert_dict_to_xml(root), pretty_print=False)
-        self.seq += 1
-        mesg = b"@ieM%04d%04d0000%s%04d" % (
-            len(xml),
-            self.seq,
-            self._xor(xml),
-            self.seq,
-        )
-        self.sock.send(mesg)
+        try:
+            xml: str = etree.tostring(self._convert_dict_to_xml(root), pretty_print=False)
+            self.seq += 1
+            mesg = b"@ieM%04d%04d0000%s%04d" % (
+                len(xml),
+                self.seq,
+                self._xor(xml),
+                self.seq,
+            )
+            self.sock.sendall(mesg)
+        except OSError as e:
+            self.logger.error("Error during sending message: %s", e)
+            self.sock.shutdown(socket.SHUT_RDWR)
+            self.sock.close()
+            raise
+
 
     def _receive(self):
         try:
             data = self.sock.recv(1024)
-            if data is None:
-                self._print("Data received is null")
-            else:
-                self._print(f"Data received is length: {len(data)}")
-        except socket.timeout:
-            raise ConnectionError("Connection timed out")
+            if not data:
+                self._print("Connection close from server (recv == b'')")
+                self.sock.shutdown(socket.SHUT_RDWR)
+                self.sock.close()
+                raise ConnectionError("Connection close from server")
+
+            self._print(f"Data received, length: {len(data)}")
+
+            # Parsiamo solo se data è valido
+            payload = self._xor(data[16:-4]).decode()
+            return xmltodict.parse(
+                payload,
+                xml_attribs=False,
+                dict_constructor=dict,
+                postprocessor=self._xmlread,
+            )
+
+        except TimeoutError as e:
+            raise ConnectionError("Timeout during receive from server") from e
+
         except OSError as e:
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
-            raise ConnectionError("Connection error")
-        return xmltodict.parse(
-            self._xor(data[16:-4]).decode(),
-            xml_attribs=False,
-            dict_constructor=dict,
-            postprocessor=self._xmlread,
-        )
+            raise ConnectionError(f"Connection error: {e}") from e
+
 
     def _xor(self, input):
         sz = bytearray.fromhex(
