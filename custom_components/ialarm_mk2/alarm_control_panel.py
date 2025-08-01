@@ -1,5 +1,8 @@
 """Interfaces with iAlarmMk control panels."""
+
 from __future__ import annotations
+
+import logging
 
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
@@ -16,6 +19,8 @@ from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
 from .coordinator import iAlarmMk2Coordinator
 
+_LOGGER = logging.getLogger(__name__)
+
 IALARMMK_TO_HASS = {
     ipyialarmmk.iAlarmMkInterface.ARMED_AWAY: AlarmControlPanelState.ARMED_AWAY,
     ipyialarmmk.iAlarmMkInterface.ARMED_STAY: AlarmControlPanelState.ARMED_HOME,
@@ -23,23 +28,25 @@ IALARMMK_TO_HASS = {
     ipyialarmmk.iAlarmMkInterface.TRIGGERED: AlarmControlPanelState.TRIGGERED,
     ipyialarmmk.iAlarmMkInterface.ALARM_ARMING: AlarmControlPanelState.ARMING,
     ipyialarmmk.iAlarmMkInterface.ARMED_PARTIAL: AlarmControlPanelState.ARMED_CUSTOM_BYPASS,
-    ipyialarmmk.iAlarmMkInterface.UNAVAILABLE: STATE_UNAVAILABLE
+    ipyialarmmk.iAlarmMkInterface.UNAVAILABLE: STATE_UNAVAILABLE,
 }
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up a iAlarm-MK alarm control panel based on a config entry."""
+    _LOGGER.info("Set up sensors based on a config entry.")
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([iAlarmMkPanel(coordinator)])
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.data[DOMAIN].async_unload_entry(entry.entry_id)
 
-class iAlarmMkPanel(
-    CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEntity
-):
+
+class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEntity):
     """Representation of an iAlarm-MK device."""
 
     _attr_supported_features = (
@@ -61,7 +68,7 @@ class iAlarmMkPanel(
     @property
     def alarm_state(self) -> str | None:
         """Return the state of the device."""
-        return IALARMMK_TO_HASS.get(self.coordinator.hub.state)
+        return IALARMMK_TO_HASS.get(self.coordinator.data.alarm_data.state)
 
     @property
     def changed_by(self) -> str | None:
@@ -71,9 +78,7 @@ class iAlarmMkPanel(
     @property
     def extra_state_attributes(self):
         """Ritorna gli attributi personalizzati dinamici."""
-        return {
-            "lastRealUpdateStatus": self.coordinator.hub.lastRealUpdateStatus
-        }
+        return {"lastRealUpdateStatus": self.coordinator.hub.lastRealUpdateStatus}
 
     def alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
@@ -101,5 +106,3 @@ class iAlarmMkPanel(
         except AttributeError as e:
             self.logger.error("Error retrieving user_id: %s", e)
         return user_id
-
-

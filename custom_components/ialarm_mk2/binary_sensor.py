@@ -19,14 +19,16 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up sensors based on a config entry."""
     _LOGGER.info("Set up sensors based on a config entry.")
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(coordinator.sensors,True)
+    async_add_entities(coordinator.sensors, True)
     _LOGGER.debug(coordinator.sensors)
+
 
 class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     """Representation of a iAlarm Status Sensor."""
@@ -39,7 +41,7 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         index: int,
         entity_id: str,
         unique_id: str,
-        zone_type: int
+        zone_type: int,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -51,12 +53,12 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         self.index: int = index
         self._attr_is_on = None
         self._attr_state = None
-        #Types: 0: Disabilitata, 1: Ritardata, 2: Perimetrale, 3:Interna, 4: Emergenza, 5: Attiva 24 ore, 6: Incendio, 7: Chiavi
+        # Types: 0: Disabilitata, 1: Ritardata, 2: Perimetrale, 3:Interna, 4: Emergenza, 5: Attiva 24 ore, 6: Incendio, 7: Chiavi
         match zone_type:
             case 1 | 2:
-                if(self.name.lower().find("port")>0):
+                if self.name.lower().find("port") > 0:
                     self._attr_device_class = BinarySensorDeviceClass.DOOR
-                elif(self.name.lower().find("intern")>0):
+                elif self.name.lower().find("intern") > 0:
                     self._attr_device_class = BinarySensorDeviceClass.MOTION
                 else:
                     self._attr_device_class = BinarySensorDeviceClass.WINDOW
@@ -65,27 +67,29 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             case 4 | 5:
                 self._attr_device_class = BinarySensorDeviceClass.PROBLEM
             case 6:
-                if(self.name.lower().find("gas")>0):
+                if self.name.lower().find("gas") > 0:
                     self._attr_device_class = BinarySensorDeviceClass.GAS
                 else:
                     self._attr_device_class = BinarySensorDeviceClass.SMOKE
             case 0 | _:
                 self._attr_device_class = BinarySensorDeviceClass.OPENING
-        self._low_battery:bool = None
-        self._loss:bool = None
-        self._bypass:bool = None
+        self._low_battery: bool = None
+        self._loss: bool = None
+        self._bypass: bool = None
         self._last_check = None
 
-    def set_attr_is_on(self, state:bool):
-        '''set_attr_is_on.'''
+    def set_attr_is_on(self, state: bool):
+        """set_attr_is_on."""
         self._attr_is_on = state
 
     def set_state(self, state):
-        '''set_state.'''
+        """set_state."""
         self._attr_state = state
 
-    def set_extra_state_attributes(self,low_battery:bool,loss:bool,bypass:bool,last_check):
-        '''set_extra_state_attributes.'''
+    def set_extra_state_attributes(
+        self, low_battery: bool, loss: bool, bypass: bool, last_check
+    ):
+        """set_extra_state_attributes."""
         self._low_battery = low_battery
         self._loss = loss
         self._bypass = bypass

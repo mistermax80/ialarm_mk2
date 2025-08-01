@@ -1,19 +1,15 @@
 {
   "domain": "ialarm_mk2",
   "name": "iAlarm-MK Integration 2",
-  "version": "2025.07.20",
-  "codeowners": [
-    "@mistermax80"
-  ],
-  "loggers": ["ialarm-mk2"],
+  "version": "2.2.1-alpha.1",
+  "codeowners": ["@mistermax80"],
+  "loggers": ["ialarm_mk2"],
   "config_flow": true,
-  "single_config_entry": true,
+  "config_entry": true,
   "dependencies": [],
   "documentation": "https://github.com/mistermax80/ialarm_mk2",
   "issue_tracker": "https://github.com/mistermax80/ialarm_mk2/issues",
-  "homekit": {},
   "iot_class": "cloud_polling",
-  "requirements": ["lxml"],
-  "ssdp": [],
-  "zeroconf": []
+  "integration_type": "hub",
+  "requirements": ["lxml"]
 }
