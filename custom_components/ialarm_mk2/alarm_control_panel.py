@@ -13,7 +13,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
@@ -37,8 +40,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up a iAlarm-MK alarm control panel based on a config entry."""
     _LOGGER.info("Set up sensors based on a config entry.")
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([iAlarmMkPanel(coordinator)])
+    coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    _LOGGER.debug("Setup with coordinator id: %s", id(coordinator))
+    async_add_entities([iAlarmMkPanel(coordinator)], update_before_add=False)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -38,7 +38,7 @@ class IAlarmMkHub:
         self.changed_by: str = None
         self.lastRealUpdateStatus = None
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(
-            self.username, self.password, self.host, self.port, self.hass, _LOGGER
+            self.username, self.password, self.host, self.port, self.hass
         )
         self.device_info: DeviceInfo | None = None
 

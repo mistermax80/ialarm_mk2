@@ -2,6 +2,7 @@
 
 import asyncio
 from asyncio.timeouts import timeout
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 import time
@@ -16,6 +17,27 @@ from .hub import IAlarmMkHub
 
 _LOGGER = logging.getLogger(__name__)
 
+@dataclass
+class SensorData:
+    """Struttura dati dei sensori."""
+
+    index: int
+    name: str
+    is_on: bool
+
+@dataclass
+class AlarmData:
+    """Struttura dati dell'allarme."""
+
+    state: int
+    temporary_state: str | None = None
+
+@dataclass
+class Data:
+    """Struttura dati compessiva per gesione del coordinator.data ."""
+
+    alarm_data: AlarmData
+    sensors_data: list[SensorData]
 
 class iAlarmMk2Coordinator(DataUpdateCoordinator):
     """Class to manage fetching iAlarm-MK data."""
@@ -33,8 +55,16 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         self.hub: IAlarmMkHub = hub
         self._subscription_task = None
         self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
-        # self.hub.ialarmmk.set_callback_only_status(self.callback_only_status)
-        self.sensors: IAlarmmkSensor = []
+
+        self.sensors: list[IAlarmmkSensor] = []
+
+        # Allarme inizializzato con stato fittizio (es. 0 = disinserito)
+        alarm_data = AlarmData(state=0)
+        # Lista vuota di sensori, se ancora non disponibili
+        sensors_data: list[SensorData] = []
+        # Inizializzazione completa dell'oggetto Data
+        self.data = Data(alarm_data=alarm_data, sensors_data=sensors_data)
+
         self.num_read_ok: int = 0
         self.num_read_ko: int = 0
 
@@ -167,7 +197,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         )
         self.async_set_updated_data(self.hub.state)
 
-    async def _async_update_data(self) -> None:
+    async def _async_update_data(self) -> Data:
         """Fetch data from iAlarm-MK 2."""
         _LOGGER.info("Fetching data...")
 
@@ -177,15 +207,24 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         try:
             async with timeout(30):
-                await self.hass.async_add_executor_job(self._fetch_device_data)
+                return await self.hass.async_add_executor_job(self._fetch_device_data)
 
-            await self.async_update_data()
+            #await self.async_update_data()
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             raise UpdateFailed(error) from error
 
-    def _fetch_device_data(self) -> None:
+    def _fetch_device_data(self) -> Data:
         """Fetch data from iAlarm-MK via synchronous functions."""
+
+        _LOGGER.debug("Coordinator data: %s", self.data)
+
+        alarm_data = AlarmData(0)
+        # Lista vuota di sensori, se ancora non disponibili
+        sensors_data: list[SensorData] = []
+        # Inizializzazione completa dell'oggetto Data
+        return_data = Data(alarm_data, sensors_data)
+
         try:
             status: int = self.hub.ialarmmk.get_status()
             _LOGGER.debug(
@@ -219,32 +258,35 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
                     for _idx, sensor in enumerate(self.sensors):
                         sensor: IAlarmmkSensor
+                        sensorData: SensorData = SensorData(
+                            index=sensor.index, name=sensor.name, is_on=None
+                        )
                         state: int = status[int(sensor.index)]
 
                         log_message += f"\t- {sensor.name}: state {state} --> "
 
                         # Verifica se la zona è persa
                         if state & self.hub.ialarmmk.ZONE_LOSS:
-                            sensor.set_attr_is_on(None)
+                            sensorData.is_on = None
                             log_message += f"(Persa) {bin(state)} \n"
                         # Verifica se la zona non è utilizzata
                         elif state == self.hub.ialarmmk.ZONE_NOT_USED:
-                            sensor.set_attr_is_on(None)
+                            sensorData.is_on = None
                             log_message += f"(Non Usato) {bin(state)} \n"
                         # Verifica se la zona è in uso
                         elif state & self.hub.ialarmmk.ZONE_IN_USE:
                             # Verifica se la zona è in uso e in fault (aperto)
                             if state & self.hub.ialarmmk.ZONE_FAULT:
-                                sensor.set_attr_is_on(True)
+                                sensorData.is_on = True
                                 log_message += f"(Aperto) {bin(state)} \n"
                             # Verifica se la zona è in uso e non in fault (chiuso)
                             else:
-                                sensor.set_attr_is_on(False)
+                                sensorData.is_on = False
                                 log_message += f"(Chiuso) {bin(state)} \n"
                         else:
-                            sensor.set_attr_is_on(None)
+                            sensorData.is_on = None
                             _LOGGER.warning(
-                                "%s: state (Sconosciuto) %s \n", sensor.name, bin(state)
+                                "%s: state (Sconosciuto) %s \n", sensorData.name, bin(state)
                             )
 
                         # Aggiorna gli attributi di stato extra
@@ -254,6 +296,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                             bool(state & self.hub.ialarmmk.ZONE_BYPASS),
                             current_time,
                         )
+                        return_data.sensors_data.append(sensorData)
+
                     # Logga il messaggio finale
                     _LOGGER.debug(log_message)
 
@@ -285,6 +329,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         except ConnectionError as e:
             _LOGGER.error("Error fetching data: %s", e)
             raise UpdateFailed("Connection error") from e
+
+        _LOGGER.debug("return_data: %s", return_data)
+
+        return return_data
 
     async def async_shutdown(self, *args):
         """Gestisci la chiusura delle risorse quando Home Assistant si spegne."""

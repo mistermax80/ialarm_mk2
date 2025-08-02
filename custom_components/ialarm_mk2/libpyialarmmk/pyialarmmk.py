@@ -16,6 +16,7 @@
 
 import asyncio
 from collections import OrderedDict as OD
+import logging
 import random
 import re
 import socket
@@ -25,6 +26,8 @@ import uuid
 
 from lxml import etree
 import xmltodict
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ConnectionError(Exception):
@@ -52,7 +55,7 @@ class iAlarmMkClient:
     seq = 0
     timeout = 10
 
-    def __init__(self, host, port, uid, pwd, logger):
+    def __init__(self, host, port, uid, pwd):
         self.sock = None
 
         self.host = host
@@ -60,7 +63,6 @@ class iAlarmMkClient:
         self.uid = uid
         self.pwd = pwd
         self.token = None
-        self.logger = logger
 
     def __del__(self):
         self.logout()
@@ -712,8 +714,8 @@ class iAlarmMkClient:
         return self._(xpath, cmd)
 
     def _print(self, data):
-        if self.logger is not None:
-            self.logger.debug(str(data))
+        if _LOGGER is not None:
+            _LOGGER.debug(str(data))
         else:
             print(str(data))
 
@@ -896,7 +898,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
     keepalive = 60
     timeout = 10
 
-    def __init__(self, host, port, uid, handler, loop, on_con_lost, threadID, logger=None):
+    def __init__(self, host, port, uid, handler, loop, on_con_lost, threadID):
         if not callable(handler):
             raise AttributeError("handler is not a function")
         self.host = host
@@ -912,7 +914,6 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self.on_con_lost = on_con_lost
         self.transport = None
         self.threadID = threadID
-        self.logger = logger
 
         # asyncore.dispatcher.__init__(self, map=self._thread_sockets)
 
@@ -1059,8 +1060,8 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self._print("iAlarmMkPushClient - _keepalive, sent messagge:"+str(mesg))
 
     def _print(self, data):
-        if self.logger is not None:
-            self.logger.debug(str(data))
+        if _LOGGER is not None:
+            _LOGGER.debug(str(data))
         else:
             print(str(data))
 

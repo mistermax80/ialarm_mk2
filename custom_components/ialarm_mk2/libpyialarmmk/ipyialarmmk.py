@@ -1,26 +1,31 @@
-# Copyright (C) 2022, ServiceA3
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
+"""Copyright (C) 2022, ServiceA3.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+"""
 
 import asyncio
 from datetime import datetime
 import json
+import logging
 import threading
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
 
 from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class iAlarmMkInterface:
@@ -43,7 +48,7 @@ class iAlarmMkInterface:
         TRIGGERED: "TRIGGERED",
         ALARM_ARMING: "ALARM_ARMING",
         UNAVAILABLE: "UNAVAILABLE",
-        ARMED_PARTIAL: "ARMED_PARTIAL"
+        ARMED_PARTIAL: "ARMED_PARTIAL",
     }
 
     ZONE_NOT_USED = 0
@@ -64,17 +69,16 @@ class iAlarmMkInterface:
         host: str,
         port: int,
         hass: HomeAssistant = None,
-        logger = None,
+        logger=None,
     ):
-        '''Impostazione.'''
+        """Impostazione."""
         self.threadID = "iAlarmMK2-ThreadID"
         self.host = host
         self.port = port
         self.uid = uid
         self.pwd = pwd
-        self.logger = logger
 
-        self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd, self.logger)
+        self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd)
         self.status = None
         self.callback = None
         self.callback_only_status = None
@@ -87,38 +91,42 @@ class iAlarmMkInterface:
         self._get_status()
 
     def set_callback(self, callback, callback_only_status):
-        '''set_callback.'''
+        """set_callback."""
         self.callback = callback
         self.callback_only_status = callback_only_status
 
     def get_threads(self) -> int:
-        '''Recupera il numero di threads attivi.'''
+        """Recupera il numero di threads attivi."""
         threads = threading.enumerate()
         specific_threads = [t for t in threads if t.name.startswith(self.threadID)]
         for thread in specific_threads:
-            self.logger.debug(f"Active thread: {thread.name}")  # noqa: G004
+            _LOGGER.debug(f"Active thread: {thread.name}")  # noqa: G004
         return len(specific_threads)
 
     async def subscribe(self):
-        '''Funzione migliorata.'''
+        """Funzione migliorata."""
         disconnect_time = 60 * 5
 
         while True:
             # Controlla se il task è stato cancellato prima di eseguire altre operazioni
             if self._cancelled:
-                self.logger.info("Subscription task cancellato.")
+                _LOGGER.info("Subscription task cancelled.")
                 break
 
             num_treads = self.get_threads()
-            self.logger.debug(f"Numbers of threads for '{self.threadID}': {num_treads}")  # noqa: G004
+            _LOGGER.debug(f"Numbers of threads for '{self.threadID}': {num_treads}")  # noqa: G004
             loop = asyncio.get_running_loop()
             on_con_lost = loop.create_future()
 
             try:
                 # Se non esiste un client o il trasporto è chiuso, crea una nuova connessione
-                if self.client is None or self.transport is None or self.transport.is_closing():
+                if (
+                    self.client is None
+                    or self.transport is None
+                    or self.transport.is_closing()
+                ):
                     if self.transport:
-                        self.logger.debug("Closing existing transport.")
+                        _LOGGER.debug("Closing existing transport.")
                         self.transport.close()
                         self.transport = None  # Resetta il trasporto
 
@@ -130,28 +138,27 @@ class iAlarmMkInterface:
                         loop,
                         on_con_lost,
                         self.threadID,
-                        self.logger,
                     )
                     self.transport, protocol = await loop.create_connection(
                         lambda: self.client,
                         self.host,
                         self.port,
                     )
-                    self.logger.info("Connected to the server.")
+                    _LOGGER.info("Connected to the server.")
 
                 # Mantieni la connessione per `disconnect_time`
                 await asyncio.sleep(disconnect_time)
 
             except (ConnectionError, TimeoutError) as e:
-                self.logger.error(f"Connection error: {e}")
+                _LOGGER.error("Connection error: %s", e)
 
             except Exception as e:
-                self.logger.error(f"Unexpected error: {e}")
+                _LOGGER.error("Unexpected error:  %s", e)
 
             finally:
                 # Chiudi il trasporto se il client segnala che la connessione è terminata
                 if on_con_lost.done():
-                    self.logger.info("Connection lost. Cleaning up...")
+                    _LOGGER.info("Connection lost. Cleaning up...")
                     if self.transport and not self.transport.is_closing():
                         self.transport.close()
                     self.client = None  # Resetta il client
@@ -161,20 +168,23 @@ class iAlarmMkInterface:
                 await asyncio.sleep(1)
 
     def cancel_subscription(self):
-        '''Metodo per cancellare la subscription.'''
+        """Metodo per cancellare la subscription."""
         self._cancelled = True  # Imposta il flag di cancellazione
 
     def _get_status(self):
-        self.logger.debug("Retrieving DevStatus...")
+        _LOGGER.debug("Retrieving DevStatus...")
         try:
             self.ialarmmkClient.login()
             self.status = self.ialarmmkClient.GetAlarmStatus().get("DevStatus")
-            self.logger.debug("DevStatus: %s(%s)", self.status_dict.get(self.status),self.status)
+            _LOGGER.debug(
+                "DevStatus: %s(%s)", self.status_dict.get(self.status), self.status
+            )
             self.ialarmmkClient.logout()
         except Exception:
             self.status = self.UNAVAILABLE
 
     def get_status(self):
+        """Return value local variable."""
         return self.status
 
     def set_status(self, data_event_received):
@@ -187,14 +197,25 @@ class iAlarmMkInterface:
             1406: 1,
             3401: 0,
             3441: 2,
-            1100: 4, 1101: 4, 1120: 4,
-            1131: 4, 1132: 4, 1133: 4,
-            1134: 4, 1137: 4,
-            3456: 8
+            1100: 4,
+            1101: 4,
+            1120: 4,
+            1131: 4,
+            1132: 4,
+            1133: 4,
+            1134: 4,
+            1137: 4,
+            3456: 8,
         }
 
-        self.status = status_map.get(cid, data_event_received.get("status",self.status))
-        self.logger.debug("Real status updated to: %s(%s)", self.status_dict.get(self.status),self.status)
+        self.status = status_map.get(
+            cid, data_event_received.get("status", self.status)
+        )
+        _LOGGER.debug(
+            "Real status updated to: %s(%s)",
+            self.status_dict.get(self.status),
+            self.status,
+        )
 
         tz = ZoneInfo(self.hass.config.time_zone)
         current_time = datetime.now(tz)
@@ -209,94 +230,98 @@ class iAlarmMkInterface:
             "ZoneName": data_event_received.get("ZoneName"),
             "Zone": data_event_received.get("Zone"),
             "Err": data_event_received.get("Err"),
-            "Json": json.dumps(data_event_received)
+            "Json": json.dumps(data_event_received),
         }
 
         # Invoca il callback se definito
         if self.callback:
-            #self.logger.debug("Invoke callback to passing event data: %s", event_data)
+            # _LOGGER.debug("Invoke callback to passing event data: %s", event_data)
             self.callback(event_data)
         else:
-            self.logger.debug("Callback is None")
+            _LOGGER.debug("Callback is None")
 
     def cancel_alarm(self) -> None:
+        """Command for cancel alarm."""
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(3)
+            self.ialarmmkClient.SetAlarmStatus(self.CANCEL)
             self._set_status(self.DISARMED)
             self.ialarmmkClient.logout()
         except Exception as e:
-            self.logger.error("Error canceling alarm: %s", e)
+            _LOGGER.error("Error canceling alarm: %s", e)
 
     def arm_stay(self, user_id: str | None) -> None:
+        """Command for arm alarm."""
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(2)
+            self.ialarmmkClient.SetAlarmStatus(self.ARMED_STAY)
             self._set_status(self.ARMED_STAY, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
-            self.logger.error("Error arming alarm in stay mode: %s", e)
+            _LOGGER.error("Error arming alarm in stay mode: %s", e)
 
     def disarm(self, user_id: str | None) -> None:
+        """Command for disarm alarm."""
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(1)
+            self.ialarmmkClient.SetAlarmStatus(self.DISARMED)
             self._set_status(self.DISARMED, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
-            self.logger.error("Error disarming alarm: %s", e)
+            _LOGGER.error("Error disarming alarm: %s", e)
 
     def arm_away(self, user_id: str | None) -> None:
+        """Command for arm alarm."""
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(0)
+            self.ialarmmkClient.SetAlarmStatus(self.ARMED_AWAY)
             self._set_status(self.ALARM_ARMING, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
-            self.logger.error("Error arming alarm in away mode: %s", e)
+            _LOGGER.error("Error arming alarm in away mode: %s", e)
 
     def arm_partial(self, user_id: str | None) -> None:
+        """Command for arm partial alarm."""
         try:
             self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(8)
+            self.ialarmmkClient.SetAlarmStatus(self.ARMED_PARTIAL)
             self._set_status(self.ARMED_PARTIAL, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
-            self.logger.error("Error arming alarm in partial mode: %s", e)
+            _LOGGER.error("Error arming alarm in partial mode: %s", e)
 
     def _set_status(self, status, user_id: str | None) -> None:
         if self.hass is not None:
             try:
-                result = asyncio.run_coroutine_threadsafe(
+                asyncio.run_coroutine_threadsafe(
                     self.async_set_status(status, user_id), self.hass.loop
                 ).result()
                 # Puoi anche loggare il risultato se necessario
-                self.logger.debug("Status updated successfully: %s", status)
+                _LOGGER.debug("Status updated successfully: %s", status)
             except Exception as e:
                 # Gestisci l'eccezione e logga l'errore
-                self.logger.error("Error updating status: %s", e)
+                _LOGGER.error("Error updating status: %s", e)
 
     async def async_set_status(self, status, user_id: str | None) -> None:
+        """Set internal data and call callback for update status."""
         tz = ZoneInfo(self.hass.config.time_zone)
         current_time = datetime.now(tz)
         data = {
-            'Status': status,
-            'LastRealUpdateStatus': current_time,
-            'user_id': user_id
+            "Status": status,
+            "LastRealUpdateStatus": current_time,
+            "user_id": user_id,
         }
         self.callback_only_status(data)
 
     def get_mac(self) -> dict:
+        """For retrieve MAC address."""
         self.ialarmmkClient.login()
         network_info = self.ialarmmkClient.GetNet()
         self.ialarmmkClient.logout()
         if network_info is not None:
             mac = network_info.get("Mac", "")
             name = network_info.get("Name", "iAlarm-MK")
-            return_data = {
-                'Mac': mac,
-                'Name': name
-        }
+            return_data = {"Mac": mac, "Name": name}
         if mac:
             return return_data
         raise ConnectionError(
