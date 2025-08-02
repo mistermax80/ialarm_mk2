@@ -68,7 +68,7 @@ class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEn
     @property
     def alarm_state(self) -> str | None:
         """Return the state of the device."""
-        return IALARMMK_TO_HASS.get(self.coordinator.data.alarm_data.state)
+        return IALARMMK_TO_HASS.get(self.coordinator.hub.state)
 
     @property
     def changed_by(self) -> str | None:

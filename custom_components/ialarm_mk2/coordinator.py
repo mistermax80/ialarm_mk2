@@ -7,7 +7,6 @@ import logging
 import time
 from zoneinfo import ZoneInfo
 
-from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -178,14 +177,14 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         try:
             async with timeout(30):
-                await self.hass.async_add_executor_job(self._update_data)
+                await self.hass.async_add_executor_job(self._fetch_device_data)
 
             await self.async_update_data()
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             raise UpdateFailed(error) from error
 
-    def _update_data(self) -> None:
+    def _fetch_device_data(self) -> None:
         """Fetch data from iAlarm-MK via synchronous functions."""
         try:
             status: int = self.hub.ialarmmk.get_status()
@@ -214,6 +213,50 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Retrieve last sensors status.")
                     _LOGGER.debug("Status: %s", status)
                     self.num_read_ok += 1
+
+                    # Inizializza un messaggio di log e lo stato dei sensori
+                    log_message = "\n"
+
+                    for _idx, sensor in enumerate(self.sensors):
+                        sensor: IAlarmmkSensor
+                        state: int = status[int(sensor.index)]
+
+                        log_message += f"\t- {sensor.name}: state {state} --> "
+
+                        # Verifica se la zona è persa
+                        if state & self.hub.ialarmmk.ZONE_LOSS:
+                            sensor.set_attr_is_on(None)
+                            log_message += f"(Persa) {bin(state)} \n"
+                        # Verifica se la zona non è utilizzata
+                        elif state == self.hub.ialarmmk.ZONE_NOT_USED:
+                            sensor.set_attr_is_on(None)
+                            log_message += f"(Non Usato) {bin(state)} \n"
+                        # Verifica se la zona è in uso
+                        elif state & self.hub.ialarmmk.ZONE_IN_USE:
+                            # Verifica se la zona è in uso e in fault (aperto)
+                            if state & self.hub.ialarmmk.ZONE_FAULT:
+                                sensor.set_attr_is_on(True)
+                                log_message += f"(Aperto) {bin(state)} \n"
+                            # Verifica se la zona è in uso e non in fault (chiuso)
+                            else:
+                                sensor.set_attr_is_on(False)
+                                log_message += f"(Chiuso) {bin(state)} \n"
+                        else:
+                            sensor.set_attr_is_on(None)
+                            _LOGGER.warning(
+                                "%s: state (Sconosciuto) %s \n", sensor.name, bin(state)
+                            )
+
+                        # Aggiorna gli attributi di stato extra
+                        sensor.set_extra_state_attributes(
+                            bool(state & self.hub.ialarmmk.ZONE_LOW_BATTERY),
+                            bool(state & self.hub.ialarmmk.ZONE_LOSS),
+                            bool(state & self.hub.ialarmmk.ZONE_BYPASS),
+                            current_time,
+                        )
+                    # Logga il messaggio finale
+                    _LOGGER.debug(log_message)
+
                     break  # Se il blocco riesce, esci dal ciclo
                 except Exception as e:
                     self.num_read_ko += 1
@@ -239,47 +282,6 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                         self.num_read_ko,
                     )
 
-            # Inizializza un messaggio di log
-            log_message = "\n"
-
-            for _idx, sensor in enumerate(self.sensors):
-                sensor: IAlarmmkSensor
-                state: int = status[int(sensor.index)]
-
-                log_message += f"{sensor.name}: state "
-
-                # Verifica se la zona è in uso e in errore
-                if (
-                    state & self.hub.ialarmmk.ZONE_IN_USE
-                    and state & self.hub.ialarmmk.ZONE_FAULT
-                ):
-                    sensor.set_attr_is_on(True)
-                    log_message += f"(Aperto) {bin(state)} \n"
-                # Verifica se la zona è solo in uso
-                elif state & self.hub.ialarmmk.ZONE_IN_USE:
-                    sensor.set_attr_is_on(False)
-                    log_message += f"(Chiuso) {bin(state)} \n"
-                # Verifica se la zona non è utilizzata
-                elif state == self.hub.ialarmmk.ZONE_NOT_USED:
-                    sensor.set_attr_is_on(None)
-                    sensor.set_state(STATE_UNAVAILABLE)
-                    log_message += f"(Non Usato) {bin(state)} \n"
-                else:
-                    sensor.set_attr_is_on(None)
-                    _LOGGER.warning(
-                        "%s: state (Sconosciuto) %s \n", sensor.name, bin(state)
-                    )
-
-                # Aggiorna gli attributi di stato extra
-                sensor.set_extra_state_attributes(
-                    bool(state & self.hub.ialarmmk.ZONE_LOW_BATTERY),
-                    bool(state & self.hub.ialarmmk.ZONE_LOSS),
-                    bool(state & self.hub.ialarmmk.ZONE_BYPASS),
-                    current_time,
-                )
-            # Logga il messaggio finale
-            _LOGGER.debug(log_message)
-
         except ConnectionError as e:
             _LOGGER.error("Error fetching data: %s", e)
             raise UpdateFailed("Connection error") from e
@@ -294,4 +296,5 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hub.ialarmmk.cancel_subscription()
             await self._subscription_task
         self.hub.ialarmmk.ialarmmkClient.logout()
+        super().async_shutdown()
         _LOGGER.info("Shutdown iAlarmMk custom component completed.")

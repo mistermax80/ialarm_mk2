@@ -82,10 +82,6 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         """set_attr_is_on."""
         self._attr_is_on = state
 
-    def set_state(self, state):
-        """set_state."""
-        self._attr_state = state
-
     def set_extra_state_attributes(
         self, low_battery: bool, loss: bool, bypass: bool, last_check
     ):
@@ -104,20 +100,3 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             "bypass": self._bypass,
             "last_check": self._last_check,
         }
-
-    '''
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        _LOGGER.info("Handle updated data from the coordinator.")
-        #state = self.coordinator.sensors[self.index].get("state")
-        _LOGGER.info(f"{self.name} {self.index} {self.coordinator.sensors[self.index]}")
-        #self._attr_is_on = self.coordinator.data[self.index].get("state")
-        self.async_write_ha_state()
-
-    def update(self) -> None:
-        """Fetch new state data for the sensor."""
-        _LOGGER.info("Fetch new state data for the sensor.")
-        self._attr_is_on = False
-        #await self.coordinator.async_request_refresh()
-    '''
