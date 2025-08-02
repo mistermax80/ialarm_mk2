@@ -33,7 +33,7 @@ class AlarmData:
     temporary_state: str | None = None
 
 @dataclass
-class Data:
+class CoordinatorData:
     """Struttura dati compessiva per gesione del coordinator.data ."""
 
     alarm_data: AlarmData
@@ -63,7 +63,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         # Lista vuota di sensori, se ancora non disponibili
         sensors_data: list[SensorData] = []
         # Inizializzazione completa dell'oggetto Data
-        self.data = Data(alarm_data=alarm_data, sensors_data=sensors_data)
+        self.data = CoordinatorData(alarm_data=alarm_data, sensors_data=sensors_data)
 
         self.num_read_ok: int = 0
         self.num_read_ko: int = 0
@@ -195,9 +195,12 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hub.ialarmmk.status_dict.get(self.hub.state),
             self.hub.state,
         )
-        self.async_set_updated_data(self.hub.state)
+        return_data:CoordinatorData = self.data
+        return_data.alarm_data.state = self.hub.state
+        _LOGGER.debug("return_data: %s", return_data)
+        self.async_set_updated_data(return_data)
 
-    async def _async_update_data(self) -> Data:
+    async def _async_update_data(self) -> CoordinatorData:
         """Fetch data from iAlarm-MK 2."""
         _LOGGER.info("Fetching data...")
 
@@ -214,7 +217,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             _LOGGER.exception("Error during fetch data.")
             raise UpdateFailed(error) from error
 
-    def _fetch_device_data(self) -> Data:
+    def _fetch_device_data(self) -> CoordinatorData:
         """Fetch data from iAlarm-MK via synchronous functions."""
 
         _LOGGER.debug("Coordinator data: %s", self.data)
@@ -223,7 +226,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         # Lista vuota di sensori, se ancora non disponibili
         sensors_data: list[SensorData] = []
         # Inizializzazione completa dell'oggetto Data
-        return_data = Data(alarm_data, sensors_data)
+        return_data = CoordinatorData(alarm_data, sensors_data)
 
         try:
             status: int = self.hub.ialarmmk.get_status()
