@@ -1,7 +1,8 @@
 # Home Assistant custom integration for iAlarm MK
 
 [![HACS][hacs-custom-shield]][hacs]
-[![Release][releases-shield]][releases]
+[![Stable Release][stable-shield]][stable]
+[![Latest Pre-Release][prerelease-shield]][prerelease]
 [![Downloads][downloads-shield]][downloads]
 [![Stars][stars-shield]][stars]
 [![Forks][forks-shield]][forks]
@@ -105,8 +106,11 @@ search for **iAlarm MK**, and follow the setup.
 [hacs-custom-shield]: https://img.shields.io/badge/HACS-Custom%20Repository-blue?style=for-the-badge
 [hacs]: https://hacs.xyz/repository/github/mistermax80/ialarm_mk2
 
-[releases-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?include_prereleases&style=for-the-badge
-[releases]: https://github.com/mistermax80/ialarm_mk2/releases
+[stable-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?label=Stable&sort=semver&style=for-the-badge
+[stable]: https://github.com/mistermax80/ialarm_mk2/releases/latest
+
+[prerelease-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?include_prereleases&label=Pre-Release&sort=semver&style=for-the-badge
+[prerelease]: https://github.com/mistermax80/ialarm_mk2/releases
 
 [downloads-shield]: https://img.shields.io/github/downloads/mistermax80/ialarm_mk2/total?style=for-the-badge
 [downloads]: https://github.com/mistermax80/ialarm_mk2/releases
