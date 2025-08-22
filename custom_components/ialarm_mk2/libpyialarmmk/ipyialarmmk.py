@@ -78,14 +78,15 @@ class iAlarmMkInterface:
         self.uid = uid
         self.pwd = pwd
 
-        self.ialarmmkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd)
+        self.ialarmmkClient:iAlarmMkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd)
         self.status = None
         self.callback = None
         self.callback_only_status = None
         self.hass: HomeAssistant = hass
 
-        self.client = None
-        self.transport = None
+        self.push_client: iAlarmMkPushClient | None = None
+
+        #self.transport = None
         self._cancelled = False
 
         self._get_status()
@@ -120,31 +121,27 @@ class iAlarmMkInterface:
 
             try:
                 # Se non esiste un client o il trasporto è chiuso, crea una nuova connessione
-                if (
-                    self.client is None
-                    or self.transport is None
-                    or self.transport.is_closing()
-                ):
-                    if self.transport:
+                if self.push_client is None or self.push_client.transport is None or self.push_client.transport.is_closing():
+                    if self.push_client is not None and self.push_client.transport is not None:
                         _LOGGER.debug("Closing existing transport.")
-                        self.transport.close()
-                        self.transport = None  # Resetta il trasporto
+                        self.push_client.transport.close()
+                        self.push_client.transport = None
 
-                    self.client = iAlarmMkPushClient(
+                    self.push_client:iAlarmMkPushClient = iAlarmMkPushClient(
                         self.host,
                         self.port,
                         self.uid,
                         self.set_status,
                         loop,
                         on_con_lost,
-                        self.threadID,
+                        self.threadID
                     )
-                    self.transport, protocol = await loop.create_connection(
-                        lambda: self.client,
+                    self.push_client.transport, protocol = await loop.create_connection(
+                        lambda: self.push_client,
                         self.host,
                         self.port,
                     )
-                    _LOGGER.info("Connected to the server.")
+                    _LOGGER.info("New push_client: %s, Connected to the server.", self.threadID)
 
                 # Mantieni la connessione per `disconnect_time`
                 await asyncio.sleep(disconnect_time)
@@ -159,10 +156,10 @@ class iAlarmMkInterface:
                 # Chiudi il trasporto se il client segnala che la connessione è terminata
                 if on_con_lost.done():
                     _LOGGER.info("Connection lost. Cleaning up...")
-                    if self.transport and not self.transport.is_closing():
-                        self.transport.close()
-                    self.client = None  # Resetta il client
-                    self.transport = None  # Resetta il trasporto
+                    if self.push_client.transport and not self.push_client.transport.is_closing():
+                        self.push_client.transport.close()
+                    self.push_client.transport = None  # Resetta il trasporto
+                    self.push_client = None  # Resetta il client
 
                 # Attendi prima di riconnetterti
                 await asyncio.sleep(1)

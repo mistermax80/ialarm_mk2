@@ -51,7 +51,6 @@ class ResponseError(Exception):
 
 
 class iAlarmMkClient:
-
     seq = 0
     timeout = 10
 
@@ -67,33 +66,47 @@ class iAlarmMkClient:
     def __del__(self):
         self.logout()
 
-    def is_socket_connected(self):
-        '''Controlla se il socket è già connesso. Se non è connesso inizializza un nuovo socket.'''
+    def _reinit_socket(self):
+        """Chiude e reinizializza il socket."""
+        self.close_socket()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        self._print("Nuovo socket creato.")
+
+    def is_socket_connected(self)-> bool:
+        """Controlla se il socket è già connesso. Se non è connesso inizializza un nuovo socket."""
         self._print(f"Socket file descriptor:{self.sock.fileno()}.")
         try:
-            # Se il socket è connesso, restituisce l'indirizzo del peer
+            # Controlla se il peer è valido
             self.sock.getpeername()
-            self._print("Socket already connected.")
+
+            # Verifica errori del socket
+            err = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                    self._print(f"Socket non connesso: {err}. Reinizializzo...")
+                    self._reinit_socket()
+                    return False
+            self._print("Socket già connesso e senza errori.")
         except OSError as e:
-            # Il socket non è connesso e lo reinizializza, cattura l'errore e restituisce False
-            self._print(f"Socket is not connected, error messagge: {e}. Proceding to close old socket.")
-            self.close_socket()
-            self._print("Re-initialized new socket, creating a new socket.")
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._print(f"Socket non connesso: {e}. Reinizializzo...")
+            self._reinit_socket()
             return False
         return True
 
     def login(self):
         self._print("Login method called.")
-        '''Controlla se il socket è inizializzato e valido.'''
+        """Controlla se il socket è inizializzato e valido."""
         if self.sock is None or self.sock.fileno() == -1:
             self._print("Invalid or uninitialized socket, creating a new socket.")
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 60)
 
         # Controllo se il socket è già connesso
         self._print("Checking if the socket is already connected.")
         if not self.is_socket_connected():
-            self._print("Socket not connected, setting timeout and attempting to connect.")
+            self._print(
+                "Socket not connected, setting timeout and attempting to connect."
+            )
             self.sock.settimeout(self.timeout)
             try:
                 self._print("Attempting to connect to the server.")
@@ -119,28 +132,30 @@ class iAlarmMkClient:
 
                 # Controllo degli errori nella risposta del server
                 if self.client["Err"]:
-                    self._print(f"Error during login to the server: {self.client['Err']}, token used is {self.token}")
+                    self._print(
+                        f"Error during login to the server: {self.client['Err']}, token used is {self.token}"
+                    )
                     self.close_socket()
                     raise ClientError("Login error")
                 self._print(f"Login ok, token used is {self.token}")
 
             except socket.timeout as e:
-                self._print(f"Connection timeout: {e}")
+                self._print(f"Connection timeout: {e}", e)
                 self.close_socket()
                 raise ConnectionError("Connection error: timeout")
 
             except ConnectionRefusedError as e:
-                self._print(f"Connection refused by the server: {e}")
+                self._print(f"Connection refused by the server: {e}", e)
                 self.close_socket()
                 raise ConnectionError("Connection error: connection refused")
 
             except socket.error as e:
-                self._print(f"Network error: {e}")
+                self._print(f"Network error: {e}", e)
                 self.close_socket()
                 raise ConnectionError("Connection error: network error")
 
             except Exception as e:
-                self._print(f"Unexpected error during login: {e}")
+                self._print(f"Unexpected error during login: {e}", e)
                 self.close_socket()
                 raise ClientError("Unexpected error during login")
 
@@ -495,7 +510,9 @@ class iAlarmMkClient:
 
     def SetAlarmStatus(self, status):
         cmd = OD()
-        cmd["DevStatus"] = TYP(status, ["ARM", "DISARM", "STAY", "CLEAR","","","","","PARTIAL"])
+        cmd["DevStatus"] = TYP(
+            status, ["ARM", "DISARM", "STAY", "CLEAR", "", "", "", "", "PARTIAL"]
+        )
         cmd["Err"] = None
         xpath = "/Root/Host/SetAlarmStatus"
         return self._(xpath, cmd)
@@ -583,7 +600,7 @@ class iAlarmMkClient:
     def SetRfid(self, pos, code, typ, msg):
         cmd = OD()
         cmd["Pos"] = S32(pos, 1)
-        cmd["Type"] = S32(typ, ["NO", "DS", "HS", "DM" "HM", "DC"])
+        cmd["Type"] = S32(typ, ["NO", "DS", "HS", "DM", "HM", "DC"])
         cmd["Code"] = STR(code)
         cmd["Msg"] = STR(msg)
         cmd["Err"] = None
@@ -713,9 +730,12 @@ class iAlarmMkClient:
         xpath = "/Root/Host/SetZone"
         return self._(xpath, cmd)
 
-    def _print(self, data):
+    def _print(self, data, exception: Exception | None = None):
         if _LOGGER is not None:
-            _LOGGER.debug(str(data))
+            if exception is not None:
+                _LOGGER.exception(str(data), exception)
+            else:
+                _LOGGER.debug(str(data))
         else:
             print(str(data))
 
@@ -725,7 +745,7 @@ class iAlarmMkClient:
         root = self._create(xpath, cmd)
         self._send(root)
         resp = self._receive()
-        #self._print(f"*** response: \n{resp}\n**********")
+        # self._print(f"*** response: \n{resp}\n**********")
         if is_list == False:
             return self._select(resp, xpath)
         if l is None:
@@ -751,19 +771,49 @@ class iAlarmMkClient:
         )
         self.sock.send(mesg)
 
+    def safe_shutdown(self):
+        """Chiude il socket solo se è connesso."""
+        if self.sock is None:
+            return
+
+        try:
+            fd = self.sock.fileno()
+            if fd == -1:
+                self._print("Socket già chiuso.")
+                return
+
+            err = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                self._print(f"Socket con errore {err}, skip shutdown.")
+                return
+
+            self.sock.shutdown(socket.SHUT_RDWR)
+            self._print("Socket shutdown eseguito.")
+        except OSError as e:
+            self._print(f"Errore durante shutdown: {e}")
+        finally:
+            self.sock.close()
+            self.sock = None
+
     def _receive(self):
         try:
             data = self.sock.recv(1024)
-            if data is None:
-                self._print("Data received is null")
-            else:
-                self._print(f"Data received is length: {len(data)}")
+            if data == b'':
+                self.safe_shutdown()
+                raise ConnectionError("Connection error: Connection closed by remote host.")
+            if not data:
+                self.safe_shutdown()
+                raise ConnectionError("Connection error: No data received (unexpected).")
+            self._print(f"Data received is length: {len(data)}")
         except socket.timeout:
-            raise ConnectionError("Connection timed out")
+            self.safe_shutdown()
+            raise ConnectionError("Connection timed out.")
         except OSError as e:
-            self.sock.shutdown(socket.SHUT_RDWR)
-            self.sock.close()
-            raise ConnectionError("Connection error")
+            self.safe_shutdown()
+            raise ConnectionError("Connection error.")
+        except Exception as e:
+            self.safe_shutdown()
+            raise ConnectionError("Connection error: generic error.")
         return xmltodict.parse(
             self._xor(data[16:-4]).decode(),
             xml_attribs=False,
@@ -868,7 +918,7 @@ class iAlarmMkClient:
         assert not isinstance(dictitem, type([]))
 
         if isinstance(dictitem, dict):
-            for (tag, child) in dictitem.items():
+            for tag, child in dictitem.items():
                 if isinstance(child, type([])):
                     # iterate through the array and convert
                     for list_child in child:
@@ -893,7 +943,6 @@ class iAlarmMkClient:
 
 
 class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
-
     daemon = True
     keepalive = 60
     timeout = 10
@@ -909,10 +958,10 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         cmd["Err"] = None
         xpath = "/Root/Pair/Push"
         self.mesg = self._create(xpath, cmd)
-        #self._thread_sockets = dict()
+        # self._thread_sockets = dict()
         self.loop = loop
         self.on_con_lost = on_con_lost
-        self.transport = None
+        self.transport: asyncio.transports.Transport | None = None
         self.threadID = threadID
 
         # asyncore.dispatcher.__init__(self, map=self._thread_sockets)
@@ -926,7 +975,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         return self.handle_read(data)
 
     def connection_lost(self, exc):
-        self._print("iAlarmMkPushClient - connection_lost exception: "+str(exc))
+        self._print("iAlarmMkPushClient - connection_lost exception: " + str(exc))
         self._close()
 
     def __del__(self):
@@ -946,11 +995,16 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         return False
 
     def handle_connect(self):
-        #threading.Timer(self.keepalive, self._keepalive).start()
-        timer = threading.Timer(self.keepalive, self._keepalive)
+        # threading.Timer(self.keepalive, self._keepalive).start()
+        ialarm_thread = threading.Timer(self.keepalive, self._keepalive)
         random_number = random.randint(100, 999)
-        timer.name = f"{self.threadID}-{random_number}"
-        timer.start()
+        ialarm_thread.name = f"{self.threadID}-{random_number}"
+        ialarm_thread.start()
+        self._print(
+            "iAlarmMkPushClient - handle_connect - new thread:"
+            + ialarm_thread.name
+            + "."
+        )
 
     def handle_error(self):
         self._close()
@@ -963,20 +1017,31 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             head = data[0:4]
 
             # Logging dell'header e della lunghezza dei dati ricevuti
-            self._print(f"iAlarmMkPushClient - handle_read - Header: {head}, Data Length: {len(data)}")
+            self._print(
+                f"iAlarmMkPushClient - handle_read - Header: {head}, Data Length: {len(data)}"
+            )
 
             resp = None
 
             if head == b"%maI":
-                self._print("iAlarmMkPushClient - handle_read - Keepalive message received.")
-                #threading.Timer(self.keepalive, self._keepalive).start()
-                timer = threading.Timer(self.keepalive, self._keepalive)
+                self._print(
+                    "iAlarmMkPushClient - handle_read - Keepalive message received."
+                )
+                # threading.Timer(self.keepalive, self._keepalive).start()
+                ialarm_thread = threading.Timer(self.keepalive, self._keepalive)
                 random_number = random.randint(100, 999)
-                timer.name = f"{self.threadID}-{random_number}"
-                timer.start()
+                ialarm_thread.name = f"{self.threadID}-{random_number}"
+                ialarm_thread.start()
+                self._print(
+                    "iAlarmMkPushClient - handle_read - new thread"
+                    + ialarm_thread.name
+                    + "."
+                )
 
             elif head == b"@ieM":
-                self._print("iAlarmMkPushClient - handle_read - Pairing message received.")
+                self._print(
+                    "iAlarmMkPushClient - handle_read - Pairing message received."
+                )
                 xpath = "/Root/Pair/Push"
                 resp = xmltodict.parse(
                     self._xor(data[16:-4]).decode(),
@@ -988,19 +1053,29 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                 if self.push:
                     err = self._select(resp, "%s/Err" % xpath)
                     if err:
-                        self._print("iAlarmMkPushClient - handle_read - Pairing error detected, closing connection.")
+                        self._print(
+                            "iAlarmMkPushClient - handle_read - Pairing error detected, closing connection."
+                        )
                         self._close()
                         raise PushClientError("Push subscription error")
                     else:
-                        self._print("iAlarmMkPushClient - handle_read - Device successfully paired.")
+                        self._print(
+                            "iAlarmMkPushClient - handle_read - Device successfully paired."
+                        )
                 else:
-                    self._print("iAlarmMkPushClient - handle_read - No pairing information found.")
+                    self._print(
+                        "iAlarmMkPushClient - handle_read - No pairing information found."
+                    )
                     xpath = "/Root/Host/Alarm"
-                    self._print(f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                    self._print(
+                        f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}"
+                    )
                     self.handler(self._select(resp, xpath))
 
             elif head == b"@alA":
-                self._print("iAlarmMkPushClient - handle_read - Alarm message received.")
+                self._print(
+                    "iAlarmMkPushClient - handle_read - Alarm message received."
+                )
                 xpath = "/Root/Host/Alarm"
                 resp = xmltodict.parse(
                     self._xor(data[16:-4]).decode(),
@@ -1008,11 +1083,15 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                     dict_constructor=dict,
                     postprocessor=self._xmlread,
                 )
-                self._print(f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                self._print(
+                    f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}"
+                )
                 self.handler(self._select(resp, xpath))
 
             elif head == b"!lmX":
-                self._print("iAlarmMkPushClient - handle_read - Alternate alarm message received.")
+                self._print(
+                    "iAlarmMkPushClient - handle_read - Alternate alarm message received."
+                )
                 xpath = "/Root/Host/Alarm"
                 resp = xmltodict.parse(
                     data[16:-4],
@@ -1020,16 +1099,20 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                     dict_constructor=dict,
                     postprocessor=self._xmlread,
                 )
-                self._print(f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}")
+                self._print(
+                    f"iAlarmMkPushClient - handle_read - Set handler - Processed Response: {resp}, xpath: {xpath}"
+                )
                 self.handler(self._select(resp, xpath))
 
             else:
-                self._print(f"iAlarmMkPushClient - handle_read - Unrecognized header: {head}, closing connection.")
+                self._print(
+                    f"iAlarmMkPushClient - handle_read - Unrecognized header: {head}, closing connection."
+                )
                 self._close()
                 raise ResponseError("Response error")
 
         except Exception as e:
-            self._print(f"iAlarmMkPushClient - handle_read - Error: {str(e)}")
+            self._print(f"iAlarmMkPushClient - handle_read - Error: {str(e)}", e)
             raise
 
     def handle_write(self):
@@ -1051,19 +1134,23 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                 self.transport.close()
                 self.on_con_lost.set_result(True)
         except Exception as e:
-            self._print(e)
+            self._print("Device connection close! {e}")
 
     def _keepalive(self):
         mesg = b"%maI"
         self.transport.write(mesg)
         self.mesg = None
-        self._print("iAlarmMkPushClient - _keepalive, sent messagge:"+str(mesg))
+        self._print("iAlarmMkPushClient - _keepalive, sent messagge:" + str(mesg))
 
-    def _print(self, data):
+    def _print(self, data, exception: Exception | None = None):
         if _LOGGER is not None:
-            _LOGGER.debug(str(data))
+            if exception is not None:
+                _LOGGER.exception(str(data), exception)
+            else:
+                _LOGGER.debug(str(data))
         else:
             print(str(data))
+
 
 def BOL(en):
     if en == True:
@@ -1071,31 +1158,39 @@ def BOL(en):
     else:
         return "BOL|F"
 
+
 def DTA(t):
     dta = time.strftime("%Y.%m.%d.%H.%M.%S", t)
     return "DTA,%d|%s" % (len(dta), dta)
 
+
 def PWD(text):
     return "PWD,%d|%s" % (len(text), text)
+
 
 def S32(val, pos=0):
     return "S32,%d,%d|%d" % (pos, pos, val)
 
+
 def MAC(mac):
     return "MAC,%d|%d" % (len(mac), mac)
+
 
 def IPA(ip):
     return "IPA,%d|%d" % (len(ip), ip)
 
+
 def STR(text):
     text = str(text)
     return "STR,%d|%s" % (len(text), text)
+
 
 def TYP(val, typ=[]):
     try:
         return "TYP,%s|%d" % (typ[val], val)
     except IndexError:
         return "TYP,NONE,|%d" % val
+
 
 Cid = {
     "1100": "Personal ambulance",
@@ -1131,7 +1226,7 @@ Cid = {
     "3401": "Arming Report",
     "3441": "Staying Report",
     "3570": "Bypass recovery",
-    "3456": "Parzial Report"
+    "3456": "Parzial Report",
 }
 
 TZ = {
