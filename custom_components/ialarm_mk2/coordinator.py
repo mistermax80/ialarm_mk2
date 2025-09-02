@@ -81,9 +81,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     self.hub.ialarmmk.subscribe()
                 )
             _LOGGER.debug("Task: %s", self._subscription_task)
-            # await self.hub.ialarmmk.subscribe()
-            # self._subscription_task = asyncio.create_task(self.hub.ialarmmk.subscribe())
-            # asyncio.run(self.hub.ialarmmk.subscribe())
+            #TODO RECUPERARE IL THREAD E METTERLO IN _subscription_task OPPURE CHIUDERE IL PRECEDENTE E RIAPRIRLO NUOVO
 
             self.hub.ialarmmk.ialarmmkClient.login()
             _LOGGER.debug("Login OK.")

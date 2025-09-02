@@ -37,6 +37,7 @@ class iAlarmMkInterface:
     CANCEL = 3
     TRIGGERED = 4
     ALARM_ARMING = 5
+    ALARM_DISARMING = 9
     UNAVAILABLE = 6
     ARMED_PARTIAL = 8
 
@@ -47,6 +48,7 @@ class iAlarmMkInterface:
         CANCEL: "CANCEL",
         TRIGGERED: "TRIGGERED",
         ALARM_ARMING: "ALARM_ARMING",
+        ALARM_DISARMING: "ALARM_DISARMING",
         UNAVAILABLE: "UNAVAILABLE",
         ARMED_PARTIAL: "ARMED_PARTIAL",
     }
@@ -111,11 +113,11 @@ class iAlarmMkInterface:
         while True:
             # Controlla se il task è stato cancellato prima di eseguire altre operazioni
             if self._cancelled:
-                _LOGGER.info("Subscription task cancelled.")
+                _LOGGER.info("Subscription: task cancelled.")
                 break
 
             num_treads = self.get_threads()
-            _LOGGER.debug(f"Numbers of threads for '{self.threadID}': {num_treads}")  # noqa: G004
+            _LOGGER.debug(f"Subscription: Numbers of threads for '{self.threadID}': {num_treads}")  # noqa: G004
             loop = asyncio.get_running_loop()
             on_con_lost = loop.create_future()
 
@@ -123,7 +125,7 @@ class iAlarmMkInterface:
                 # Se non esiste un client o il trasporto è chiuso, crea una nuova connessione
                 if self.push_client is None or self.push_client.transport is None or self.push_client.transport.is_closing():
                     if self.push_client is not None and self.push_client.transport is not None:
-                        _LOGGER.debug("Closing existing transport.")
+                        _LOGGER.debug("Subscription: Closing existing transport.")
                         self.push_client.transport.close()
                         self.push_client.transport = None
 
@@ -141,21 +143,21 @@ class iAlarmMkInterface:
                         self.host,
                         self.port,
                     )
-                    _LOGGER.info("New push_client: %s, Connected to the server.", self.threadID)
+                    _LOGGER.info("Subscription: New push_client %s, Connected to the server.", self.threadID)
 
                 # Mantieni la connessione per `disconnect_time`
                 await asyncio.sleep(disconnect_time)
 
             except (ConnectionError, TimeoutError) as e:
-                _LOGGER.error("Connection error: %s", e)
+                _LOGGER.error("Subscription: Connection error: %s", e)
 
             except Exception as e:
-                _LOGGER.error("Unexpected error:  %s", e)
+                _LOGGER.error("Subscription: Unexpected error:  %s", e)
 
             finally:
                 # Chiudi il trasporto se il client segnala che la connessione è terminata
                 if on_con_lost.done():
-                    _LOGGER.info("Connection lost. Cleaning up...")
+                    _LOGGER.info("Subscription: Connection lost. Cleaning up...")
                     if self.push_client.transport and not self.push_client.transport.is_closing():
                         self.push_client.transport.close()
                     self.push_client.transport = None  # Resetta il trasporto
@@ -262,7 +264,7 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(self.DISARMED)
-            self._set_status(self.DISARMED, user_id)
+            self._set_status(self.ALARM_DISARMING, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             _LOGGER.error("Error disarming alarm: %s", e)
@@ -282,7 +284,7 @@ class iAlarmMkInterface:
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(self.ARMED_PARTIAL)
-            self._set_status(self.ARMED_PARTIAL, user_id)
+            self._set_status(self.ALARM_ARMING, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             _LOGGER.error("Error arming alarm in partial mode: %s", e)

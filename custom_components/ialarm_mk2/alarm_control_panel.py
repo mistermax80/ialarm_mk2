@@ -31,6 +31,7 @@ IALARMMK_TO_HASS = {
     ipyialarmmk.iAlarmMkInterface.TRIGGERED: AlarmControlPanelState.TRIGGERED,
     ipyialarmmk.iAlarmMkInterface.ALARM_ARMING: AlarmControlPanelState.ARMING,
     ipyialarmmk.iAlarmMkInterface.ARMED_PARTIAL: AlarmControlPanelState.ARMED_CUSTOM_BYPASS,
+    ipyialarmmk.iAlarmMkInterface.ALARM_DISARMING: AlarmControlPanelState.DISARMING,
     ipyialarmmk.iAlarmMkInterface.UNAVAILABLE: STATE_UNAVAILABLE,
 }
 
@@ -73,11 +74,6 @@ class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEn
     def alarm_state(self) -> str | None:
         """Return the state of the device."""
         return IALARMMK_TO_HASS.get(self.coordinator.hub.state)
-
-    @property
-    def changed_by(self) -> str | None:
-        """Return the changed_by of the device."""
-        return self.coordinator.hub.changed_by
 
     @property
     def extra_state_attributes(self):
