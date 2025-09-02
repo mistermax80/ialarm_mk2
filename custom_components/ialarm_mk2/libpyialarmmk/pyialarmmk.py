@@ -1010,7 +1010,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         async def keepalive_loop():
             while True:
                 await asyncio.sleep(self.keepalive)
-                await self._keepalive()  # Assicurati che _keepalive sia async
+                await self._keepalive()
 
         # Creiamo un task nel loop
         task_name = f"{self.threadID}-{random.randint(100, 999)}"
@@ -1040,15 +1040,17 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
 
             if head == b"%maI":
                 self._print(
-                    "iAlarmMkPushClient.handle_read: Keepalive message received."
+                    "iAlarmMkPushClient.handle_read: keepalive message received."
                 )
 
-                self._print("iAlarmMkPushClient.handle_read: scheduling keepalive task.")
+                self._print(
+                    "iAlarmMkPushClient.handle_read: scheduling keepalive task."
+                )
 
                 async def keepalive_loop():
                     while True:
                         await asyncio.sleep(self.keepalive)
-                        await self._keepalive()  # Assicurati che _keepalive sia async
+                        await self._keepalive()
 
                 # Creiamo un task nel loop
                 task_name = f"{self.threadID}-{random.randint(100, 999)}"
@@ -1070,7 +1072,9 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                 )
                 self.push = self._select(resp, xpath)
                 if self.push:
-                    self._print(f"iAlarmMkPushClient.handle_read: (pairing information:{self.push})")
+                    self._print(
+                        f"iAlarmMkPushClient.handle_read: (pairing information:{self.push})"
+                    )
                     err = self._select(resp, f"{xpath}/Err")
                     if err:
                         self._print(
@@ -1093,9 +1097,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                     self.handler(self._select(resp, xpath))
 
             elif head == b"@alA":
-                self._print(
-                    "iAlarmMkPushClient.handle_read: Alarm message received."
-                )
+                self._print("iAlarmMkPushClient.handle_read: Alarm message received.")
                 xpath = "/Root/Host/Alarm"
                 resp = xmltodict.parse(
                     self._xor(data[16:-4]).decode(),
@@ -1137,11 +1139,11 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
 
     def handle_write(self):
         """Invio dei messaggi."""
-        self._print(
-                    f"iAlarmMkPushClient.handle_write: (mesg: {self.mesg})"
-                )
+        self._print(f"iAlarmMkPushClient.handle_write: (mesg: {self.mesg})")
         if self.transport is None:
-            self._print("iAlarmMkPushClient.handle_write: Transport not ready, cannot send message.")
+            self._print(
+                "iAlarmMkPushClient.handle_write: Transport not ready, cannot send message."
+            )
             return
         if self.mesg is not None:
             xml: bytes = etree.tostring(
@@ -1161,12 +1163,16 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                 self.transport.close()
                 self.on_con_lost.set_result(True)
         except Exception as e:
-            self._print("iAlarmMkPushClient._close: Device connection close! Exception:{e}")
+            self._print(
+                "iAlarmMkPushClient._close: Device connection close! Exception:{e}"
+            )
 
-    def _keepalive(self):
+    async def _keepalive(self):
         self._print("iAlarmMkPushClient._keepalive.")
         if self.transport is None:
-            self._print("iAlarmMkPushClient._keepalive: Transport not ready, cannot send message.")
+            self._print(
+                "iAlarmMkPushClient._keepalive: Transport not ready, cannot send message."
+            )
             return
         mesg = b"%maI"
         self.transport.write(mesg)

@@ -124,7 +124,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
     def callback(self, event_data: dict) -> None:
         """Handle status updates from iAlarm-MK."""
-        _LOGGER.debug("Received event from server, data: %s", event_data)
+        _LOGGER.debug("Manage event from server, data: %s", event_data)
 
         _LOGGER.debug(
             "Old state: %s(%s)",
@@ -152,7 +152,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
     def callback_only_status(self, data_in: dict) -> None:
         """Handle status updates from alarm panel."""
-        _LOGGER.debug("Received data in, data: %s", data_in)
+        _LOGGER.debug("Manage manual update (only status), data: %s", data_in)
+
         _LOGGER.debug(
             "Old state: %s(%s)",
             self.hub.ialarmmk.status_dict.get(self.hub.state),

@@ -211,7 +211,7 @@ class iAlarmMkInterface:
             cid, data_event_received.get("status", self.status)
         )
         _LOGGER.debug(
-            "Real status updated to: %s(%s)",
+            "Real status received is: %s(%s)",
             self.status_dict.get(self.status),
             self.status,
         )
@@ -237,7 +237,7 @@ class iAlarmMkInterface:
             # _LOGGER.debug("Invoke callback to passing event data: %s", event_data)
             self.callback(event_data)
         else:
-            _LOGGER.debug("Callback is None")
+            _LOGGER.debug("Callback is None.")
 
     def cancel_alarm(self) -> None:
         """Command for cancel alarm."""
