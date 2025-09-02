@@ -63,6 +63,7 @@ class iAlarmMkInterface:
 
     IALARMMK_P2P_DEFAULT_PORT = 18034
     IALARMMK_P2P_DEFAULT_HOST = "47.91.74.102"
+    IALARMMK_P2P_PREFIX_TREAD_ID_NAME = "iAlarmMK2-ThreadID"
 
     def __init__(
         self,
@@ -74,7 +75,7 @@ class iAlarmMkInterface:
         logger=None,
     ):
         """Impostazione."""
-        self.threadID = "iAlarmMK2-ThreadID"
+        self.threadID = iAlarmMkInterface.IALARMMK_P2P_PREFIX_TREAD_ID_NAME
         self.host = host
         self.port = port
         self.uid = uid
@@ -116,8 +117,6 @@ class iAlarmMkInterface:
                 _LOGGER.info("Subscription: task cancelled.")
                 break
 
-            num_treads = self.get_threads()
-            _LOGGER.debug(f"Subscription: Numbers of threads for '{self.threadID}': {num_treads}")  # noqa: G004
             loop = asyncio.get_running_loop()
             on_con_lost = loop.create_future()
 
@@ -143,7 +142,7 @@ class iAlarmMkInterface:
                         self.host,
                         self.port,
                     )
-                    _LOGGER.info("Subscription: New push_client %s, Connected to the server.", self.threadID)
+                    _LOGGER.info("Subscription: New push_client, connected to the server.")
 
                 # Mantieni la connessione per `disconnect_time`
                 await asyncio.sleep(disconnect_time)

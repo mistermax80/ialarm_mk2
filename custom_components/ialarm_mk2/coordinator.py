@@ -5,9 +5,11 @@ from asyncio.timeouts import timeout
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
+import random
 import time
 from zoneinfo import ZoneInfo
 
+from custom_components.ialarm_mk2.libpyialarmmk.ipyialarmmk import iAlarmMkInterface
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -76,11 +78,18 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             # Registrazione listener di spegnimento
             self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
             # Start the subscription in the background
-            if self.hub.ialarmmk.get_threads() < 1:
+
+            num_treads = self.hub.ialarmmk.get_threads()
+            _LOGGER.debug(f"Numbers of threads for '{iAlarmMkInterface.IALARMMK_P2P_PREFIX_TREAD_ID_NAME}': {num_treads}")  # noqa: G004
+            if num_treads < 1:
+                task_name = f"{iAlarmMkInterface.IALARMMK_P2P_PREFIX_TREAD_ID_NAME+"_SUBS"}-{random.randint(100, 999)}"
                 self._subscription_task = asyncio.create_task(
-                    self.hub.ialarmmk.subscribe()
+                    self.hub.ialarmmk.subscribe(),
+                    name=task_name
                 )
-            _LOGGER.debug("Task: %s", self._subscription_task)
+                _LOGGER.debug("New Subscription Task: %s", self._subscription_task)
+            else:
+                _LOGGER.debug("Existing Subscription Task: %s", self._subscription_task)
             #TODO RECUPERARE IL THREAD E METTERLO IN _subscription_task OPPURE CHIUDERE IL PRECEDENTE E RIAPRIRLO NUOVO
 
             self.hub.ialarmmk.ialarmmkClient.login()
