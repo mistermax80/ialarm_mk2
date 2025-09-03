@@ -9,12 +9,11 @@ import random
 import time
 from zoneinfo import ZoneInfo
 
-from custom_components.ialarm_mk2.libpyialarmmk.ipyialarmmk import iAlarmMkInterface
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .binary_sensor import IAlarmmkSensor
-from .const import DOMAIN
+from .const import DOMAIN, IALARMMK_P2P_PREFIX_TASK_NAME
 from .hub import IAlarmMkHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,17 +79,17 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             # Start the subscription in the background
 
             num_treads = self.hub.ialarmmk.get_threads()
-            _LOGGER.debug(f"Numbers of threads for '{iAlarmMkInterface.IALARMMK_P2P_PREFIX_TREAD_ID_NAME}': {num_treads}")  # noqa: G004
+            _LOGGER.debug(f"Check if exist threads for '{IALARMMK_P2P_PREFIX_TASK_NAME}': {num_treads}")  # noqa: G004
             if num_treads < 1:
-                task_name = f"{iAlarmMkInterface.IALARMMK_P2P_PREFIX_TREAD_ID_NAME+"_SUBS"}-{random.randint(100, 999)}"
+                task_name = f"{IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS"}_{random.randint(100, 999)}"
                 self._subscription_task = asyncio.create_task(
-                    self.hub.ialarmmk.subscribe(),
+                    self.hub.ialarmmk.subscribe(task_name),
                     name=task_name
                 )
                 _LOGGER.debug("New Subscription Task: %s", self._subscription_task)
             else:
-                _LOGGER.debug("Existing Subscription Task: %s", self._subscription_task)
-            #TODO RECUPERARE IL THREAD E METTERLO IN _subscription_task OPPURE CHIUDERE IL PRECEDENTE E RIAPRIRLO NUOVO
+                _LOGGER.warning("Existing Subscription Task: %s", self._subscription_task)
+                #TODO RECUPERARE IL THREAD E METTERLO IN _subscription_task OPPURE CHIUDERE IL PRECEDENTE E RIAPRIRLO NUOVO
 
             self.hub.ialarmmk.ialarmmkClient.login()
             _LOGGER.debug("Login OK.")
@@ -107,7 +106,6 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     sensor = {
                         "index": index,
                         "unique_id": id_sensor,
-                        "entity_id": f"binary_sensor.{DOMAIN}_{zones[index].get('Name', 'no name')}",
                         "name": zones[index].get("Name", "no name"),
                         "zone_type": int(zones[index].get("Type", 0)),
                     }
@@ -122,10 +120,8 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         for sc in SENSOR_CONFIG:
             iAlarmSensor = IAlarmmkSensor(
                 self,
-                self.hub.device_info,
                 sc["name"],
                 sc["index"],
-                sc["entity_id"],
                 sc["unique_id"],
                 sc["zone_type"],
             )

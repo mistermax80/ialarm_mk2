@@ -9,7 +9,6 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -36,9 +35,11 @@ async def async_setup_entry(
         [s.name for s in coordinator.sensors],
     )
 
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.data[DOMAIN].async_unload_entry(entry.entry_id)
+
 
 class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     """Representation of a iAlarm Status Sensor."""
@@ -46,41 +47,17 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     def __init__(
         self,
         coordinator: DataUpdateCoordinator,
-        device: DeviceInfo,
         name: str,
         index: int,
-        entity_id: str,
         unique_id: str,
         zone_type: int,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._attr_device_info = device
         self._attr_unique_id = unique_id
         self._attr_name = name
-        self._attr_entity_id = entity_id
         self._attr_index: int = index
-        # Types: 0: Disabilitata, 1: Ritardata, 2: Perimetrale, 3:Interna, 4: Emergenza, 5: Attiva 24 ore, 6: Incendio, 7: Chiavi
-        match zone_type:
-            case 1 | 2:
-                if "port" in name.lower():
-                    self._attr_device_class = BinarySensorDeviceClass.DOOR
-                elif "intern" in name.lower():
-                    self._attr_device_class = BinarySensorDeviceClass.MOTION
-                else:
-                    self._attr_device_class = BinarySensorDeviceClass.WINDOW
-            case 3:
-                self._attr_device_class = BinarySensorDeviceClass.MOTION
-            case 4 | 5:
-                self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-            case 6:
-                if "gas" in name.lower():
-                    self._attr_device_class = BinarySensorDeviceClass.GAS
-                else:
-                    self._attr_device_class = BinarySensorDeviceClass.SMOKE
-            case 0 | _:
-                self._attr_device_class = BinarySensorDeviceClass.OPENING
-        self._attr_is_on = None
+        self._attr_zone_type: str = zone_type
         self._attr_low_battery: bool = None
         self._attr_loss: bool = None
         self._attr_bypass: bool = None
@@ -93,6 +70,29 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
         sensor = self._sensor_map.get(self._attr_index)
         return sensor.is_on if sensor else None
+
+    @property
+    def device_class(self) -> BinarySensorDeviceClass | None:
+        """Return the class of this entity."""
+        # Types: 0: Disabilitata, 1: Ritardata, 2: Perimetrale, 3:Interna, 4: Emergenza, 5: Attiva 24 ore, 6: Incendio, 7: Chiavi
+        match self._attr_zone_type:
+            case 1 | 2:
+                if "port" in self._attr_name.lower():
+                    return BinarySensorDeviceClass.DOOR
+                if "intern" in self._attr_name.lower():
+                    return BinarySensorDeviceClass.MOTION
+                return BinarySensorDeviceClass.WINDOW
+            case 3:
+                return BinarySensorDeviceClass.MOTION
+            case 4 | 5:
+                return BinarySensorDeviceClass.PROBLEM
+            case 6:
+                if "gas" in self._attr_name.lower():
+                    return BinarySensorDeviceClass.GAS
+                return BinarySensorDeviceClass.SMOKE
+            case 0 | _:
+                return BinarySensorDeviceClass.OPENING
+        return None
 
     @property
     def index(self) -> int:
@@ -116,4 +116,15 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             "loss": self._attr_loss,
             "bypass": self._attr_bypass,
             "last_check": self._attr_last_check,
+        }
+
+    @property
+    def device_info(self):
+        """Device Sensor Info."""
+        return {
+            "identifiers": {(DOMAIN, self._attr_name)},
+            "name": self._attr_name,
+            "manufacturer": "antifurto 365",
+            "model": "Sensor",
+            "via_device": (DOMAIN, self.coordinator.hub.username),
         }

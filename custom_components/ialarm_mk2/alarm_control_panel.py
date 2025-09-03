@@ -12,6 +12,7 @@ from homeassistant.components.alarm_control_panel import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -66,9 +67,8 @@ class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEn
         """Initialize the alarm panel."""
         super().__init__(coordinator)
         self._attr_name = coordinator.hub.name
-        self._attr_unique_id = coordinator.hub.mac
+        self._attr_unique_id = coordinator.hub.username
         self.code_arm_required = False
-        self._attr_device_info = coordinator.hub.device_info
 
     @property
     def alarm_state(self) -> str | None:
@@ -95,6 +95,17 @@ class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEn
     def alarm_arm_custom_bypass(self, code: str | None = None) -> None:
         """Send arm away command."""
         self.coordinator.hub.ialarmmk.arm_partial(self._retrive_user_id())
+
+    @property
+    def device_info(self):
+        """Device Alarm Info."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.hub.username)},
+            "name": self._attr_name,
+            "manufacturer": "antifurto 365",
+            "model": "Centrale Allarme",
+            "connections": {(dr.CONNECTION_NETWORK_MAC, self.coordinator.hub.mac)},
+        }
 
     def _retrive_user_id(self) -> str:
         user_id: str = None

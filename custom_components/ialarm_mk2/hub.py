@@ -3,9 +3,7 @@
 import logging
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import format_mac
-from homeassistant.helpers.entity import DeviceInfo
 
 from . import libpyialarmmk as ipyialarmmk
 
@@ -40,7 +38,6 @@ class IAlarmMkHub:
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(
             self.username, self.password, self.host, self.port, self.hass
         )
-        self.device_info: DeviceInfo | None = None
 
     async def validate(self) -> bool:
         """Verifica la connessione e recupera le informazioni sul dispositivo."""
@@ -54,13 +51,6 @@ class IAlarmMkHub:
                 self.mac = format_mac(data_in.get("Mac"))
                 self.name = data_in.get("Name")
                 _LOGGER.info("MAC address: %s", self.mac)
-
-                # Imposta le informazioni sul dispositivo
-                self.device_info = DeviceInfo(
-                    manufacturer="antifurto 365",
-                    name=self.name,
-                    connections={(dr.CONNECTION_NETWORK_MAC, self.mac)},
-                )
         except Exception:
             _LOGGER.exception("Error during validation IAlarm device.")
             return False

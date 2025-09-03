@@ -25,7 +25,6 @@ from .hub import IAlarmMkHub
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.ALARM_CONTROL_PANEL]
 
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
     _LOGGER.info("Set up %s Integration from a config entry...", DOMAIN)

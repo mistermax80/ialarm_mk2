@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
 
+from ..const import IALARMMK_P2P_PREFIX_TASK_NAME
 from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,7 +64,6 @@ class iAlarmMkInterface:
 
     IALARMMK_P2P_DEFAULT_PORT = 18034
     IALARMMK_P2P_DEFAULT_HOST = "47.91.74.102"
-    IALARMMK_P2P_PREFIX_TREAD_ID_NAME = "iAlarmMK2-ThreadID"
 
     def __init__(
         self,
@@ -75,13 +75,14 @@ class iAlarmMkInterface:
         logger=None,
     ):
         """Impostazione."""
-        self.threadID = iAlarmMkInterface.IALARMMK_P2P_PREFIX_TREAD_ID_NAME
         self.host = host
         self.port = port
         self.uid = uid
         self.pwd = pwd
 
-        self.ialarmmkClient:iAlarmMkClient = iAlarmMkClient(self.host, self.port, self.uid, self.pwd)
+        self.ialarmmkClient: iAlarmMkClient = iAlarmMkClient(
+            self.host, self.port, self.uid, self.pwd
+        )
         self.status = None
         self.callback = None
         self.callback_only_status = None
@@ -89,7 +90,7 @@ class iAlarmMkInterface:
 
         self.push_client: iAlarmMkPushClient | None = None
 
-        #self.transport = None
+        # self.transport = None
         self._cancelled = False
 
         self._get_status()
@@ -102,72 +103,105 @@ class iAlarmMkInterface:
     def get_threads(self) -> int:
         """Recupera il numero di threads attivi."""
         threads = threading.enumerate()
-        specific_threads = [t for t in threads if t.name.startswith(self.threadID)]
+        specific_threads = [t for t in threads if t.name.startswith(IALARMMK_P2P_PREFIX_TASK_NAME)]
         for thread in specific_threads:
             _LOGGER.debug(f"Active thread: {thread.name}")  # noqa: G004
         return len(specific_threads)
 
-    async def subscribe(self):
-        """Funzione migliorata."""
-        disconnect_time = 60 * 5
+    async def subscribe(self, task_name: str):
+        """Gestisce la sottoscrizione con log migliorati."""
+        disconnect_time = 60 * 5  # 5 minuti
+        _LOGGER.debug(
+            "[%s] Task started (disconnect_time=%s(s).", task_name, disconnect_time
+        )
 
-        while True:
-            # Controlla se il task è stato cancellato prima di eseguire altre operazioni
-            if self._cancelled:
-                _LOGGER.info("Subscription: task cancelled.")
-                break
+        try:
+            while True:
+                # Controlla se il task è stato cancellato
+                if self._cancelled:
+                    _LOGGER.debug("[%s] Task cancelled. Exit loop.", task_name)
+                    # quà potrei fermare il keeplive
+                    self.push_client.handle_connect
+                    break
 
-            loop = asyncio.get_running_loop()
-            on_con_lost = loop.create_future()
+                loop = asyncio.get_running_loop()
+                on_con_lost = loop.create_future()
 
-            try:
-                # Se non esiste un client o il trasporto è chiuso, crea una nuova connessione
-                if self.push_client is None or self.push_client.transport is None or self.push_client.transport.is_closing():
-                    if self.push_client is not None and self.push_client.transport is not None:
-                        _LOGGER.debug("Subscription: Closing existing transport.")
-                        self.push_client.transport.close()
-                        self.push_client.transport = None
+                try:
+                    # Crea una nuova connessione se necessario
+                    if (
+                        self.push_client is None
+                        or self.push_client.transport is None
+                        or self.push_client.transport.is_closing()
+                    ):
+                        if (
+                            self.push_client is not None
+                            and self.push_client.transport is not None
+                        ):
+                            _LOGGER.debug("[%s] Closing old transport.", task_name)
+                            self.push_client.transport.close()
+                            self.push_client.transport = None
 
-                    self.push_client:iAlarmMkPushClient = iAlarmMkPushClient(
-                        self.host,
-                        self.port,
-                        self.uid,
-                        self.set_status,
-                        loop,
-                        on_con_lost,
-                        self.threadID
+                        self.push_client: iAlarmMkPushClient = iAlarmMkPushClient(
+                            self.host,
+                            self.port,
+                            self.uid,
+                            self.set_status,
+                            loop,
+                            on_con_lost,
+                        )
+                        (
+                            self.push_client.transport,
+                            protocol,
+                        ) = await loop.create_connection(
+                            lambda: self.push_client,
+                            self.host,
+                            self.port,
+                        )
+                        _LOGGER.info(
+                            "[%s] New connection push_client established.", task_name
+                        )
+
+                    # Mantiene viva la connessione per un certo tempo
+                    _LOGGER.debug(
+                        "[%s] Connection Active. Sleep %s(s)...",
+                        task_name,
+                        disconnect_time,
                     )
-                    self.push_client.transport, protocol = await loop.create_connection(
-                        lambda: self.push_client,
-                        self.host,
-                        self.port,
-                    )
-                    _LOGGER.info("Subscription: New push_client, connected to the server.")
+                    await asyncio.sleep(disconnect_time)
 
-                # Mantieni la connessione per `disconnect_time`
-                await asyncio.sleep(disconnect_time)
+                except (ConnectionError, TimeoutError) as e:
+                    _LOGGER.error("[%s] Connection error: %s", task_name, e)
 
-            except (ConnectionError, TimeoutError) as e:
-                _LOGGER.error("Subscription: Connection error: %s", e)
+                except Exception as e:
+                    _LOGGER.error("[%s] Unexepected error: %s", task_name, e)
 
-            except Exception as e:
-                _LOGGER.error("Subscription: Unexpected error:  %s", e)
+                finally:
+                    # Cleanup se la connessione è persa
+                    if on_con_lost.done():
+                        _LOGGER.debug("[%s] Connection lost. Cleanup...", task_name)
+                        if (
+                            self.push_client
+                            and self.push_client.transport
+                            and not self.push_client.transport.is_closing()
+                        ):
+                            self.push_client.transport.close()
+                        self.push_client = None
 
-            finally:
-                # Chiudi il trasporto se il client segnala che la connessione è terminata
-                if on_con_lost.done():
-                    _LOGGER.info("Subscription: Connection lost. Cleaning up...")
-                    if self.push_client.transport and not self.push_client.transport.is_closing():
-                        self.push_client.transport.close()
-                    self.push_client.transport = None  # Resetta il trasporto
-                    self.push_client = None  # Resetta il client
+                    # Breve pausa prima di tentare la riconnessione
+                    await asyncio.sleep(1)
 
-                # Attendi prima di riconnetterti
-                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            _LOGGER.debug("[%s] Task cancelled.", task_name)
+            raise
+
+        finally:
+            _LOGGER.debug("[%s] Task terminanted.", task_name)
 
     def cancel_subscription(self):
-        """Metodo per cancellare la subscription."""
+        """Metodo per cancellare la subscription e fermare il keep tasks."""
         self._cancelled = True  # Imposta il flag di cancellazione
+        self.push_client.handle_stop_connect()
 
     def _get_status(self):
         _LOGGER.debug("Retrieving DevStatus...")

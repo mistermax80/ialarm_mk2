@@ -16,20 +16,20 @@
 
 import asyncio
 from collections import OrderedDict as OD
+import contextlib
 import logging
 import random
 import re
 import socket
-import threading
 import time
 import uuid
 
 from lxml import etree
 import xmltodict
-import contextlib
+
+from ..const import IALARMMK_P2P_PREFIX_TASK_NAME
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class ConnectionError(Exception):
     pass
@@ -954,7 +954,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
     keepalive = 60
     timeout = 10
 
-    def __init__(self, host, port, uid, handler, loop, on_con_lost, threadID):
+    def __init__(self, host, port, uid, handler, loop, on_con_lost):
         """Inizializza il client push."""
         if not callable(handler):
             raise TypeError("handler is not a function")
@@ -969,7 +969,8 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self.loop = loop
         self.on_con_lost = on_con_lost
         self.transport: asyncio.transports.Transport | None = None
-        self.threadID = threadID
+        self._keepalive_task = None
+        self._task_cancelled = False
 
     def connection_made(self, transport: asyncio.transports.Transport) -> None:
         """Connessione push all'allarme."""
@@ -985,7 +986,10 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
 
     def connection_lost(self, exc):
         """Connessione push all'allarme persa."""
-        self._print("iAlarmMkPushClient.connection_lost, exception: " + str(exc))
+        self._print(f"iAlarmMkPushClient - connection_lost exception: {exc}")
+        if hasattr(self, "_keepalive_task") and self._keepalive_task is not None:
+            self._keepalive_task.cancel()
+            self._keepalive_task = None
         self._close()
 
     def __del__(self):
@@ -1003,21 +1007,50 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             return True
         return False
 
+    def start_keepalive(self):
+        """Avvia il keepalive asincrono in modo sicuro (un solo task)."""
+
+        async def keepalive_loop(task_name: str):
+            try:
+                while True:
+                    # Controlla se il task è stato cancellato
+                    if self._task_cancelled:
+                        _LOGGER.debug("[%s] Task cancelled. Exit loop.", task_name)
+                        break
+                    await asyncio.sleep(self.keepalive)
+                    if self.transport is None or self.transport.is_closing():
+                        self._print(f"[{task_name}] Transport closed, stop keepalive task.")
+                        break
+                    await self._keepalive()
+                    self._print(f"[{task_name}] Keepalive sent.")
+            except asyncio.CancelledError:
+                self._print(f"[{task_name}] Keepalive task cancelled.")
+                raise
+
+        # Se esiste già un task, cancelliamolo prima di crearne uno nuovo
+        if hasattr(self, "_keepalive_task") and self._keepalive_task is not None:
+            old_task = self._keepalive_task
+            if not old_task.done():
+                old_task.cancel()
+                self._print(f"[{old_task.get_name()}] Old keepalive task cancelled.")
+            self._keepalive_task = None
+
+        # Creiamo il nuovo task
+        if not self._task_cancelled:
+            task_name = f"{IALARMMK_P2P_PREFIX_TASK_NAME}KEEP_{random.randint(100, 999)}"
+            self._keepalive_task = self.loop.create_task(keepalive_loop(task_name), name=task_name)
+            self._print(f"[{task_name}] New keepalive task started (interval: {self.keepalive}s).")
+
+
     def handle_connect(self):
         """Avvia il keepalive asincrono usando il loop di asyncio."""
         self._print("iAlarmMkPushClient.handle_connect: scheduling keepalive task.")
+        self.start_keepalive()
 
-        async def keepalive_loop():
-            while True:
-                await asyncio.sleep(self.keepalive)
-                await self._keepalive()
-
-        # Creiamo un task nel loop
-        task_name = f"{self.threadID}-{random.randint(100, 999)}"
-        self._keepalive_task = self.loop.create_task(keepalive_loop(), name=task_name)
-        self._print(
-            f"iAlarmMkPushClient.handle_connect: new keepalive task started: {task_name}"
-        )
+    def handle_stop_connect(self):
+        """Ferma il keepalive asincrono usando il loop di asyncio."""
+        self._print("iAlarmMkPushClient.handle_stop_connect: stop keepalive task.")
+        self._task_cancelled = True
 
     def handle_error(self):
         """Gestione per errore."""
@@ -1039,28 +1072,8 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             resp = None
 
             if head == b"%maI":
-                self._print(
-                    "iAlarmMkPushClient.handle_read: keepalive message received."
-                )
-
-                self._print(
-                    "iAlarmMkPushClient.handle_read: scheduling keepalive task."
-                )
-
-                async def keepalive_loop():
-                    while True:
-                        await asyncio.sleep(self.keepalive)
-                        await self._keepalive()
-
-                # Creiamo un task nel loop
-                task_name = f"{self.threadID}-{random.randint(100, 999)}"
-                self._keepalive_task = self.loop.create_task(
-                    keepalive_loop(), name=task_name
-                )
-                self._print(
-                    f"iAlarmMkPushClient.handle_read: new keepalive task started: {task_name}"
-                )
-
+                self._print("iAlarmMkPushClient.handle_read: keepalive message received.")
+                self.start_keepalive()
             elif head == b"@ieM":
                 self._print("iAlarmMkPushClient.handle_read: pairing message received.")
                 xpath = "/Root/Pair/Push"
@@ -1168,7 +1181,6 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             )
 
     async def _keepalive(self):
-        self._print("iAlarmMkPushClient._keepalive.")
         if self.transport is None:
             self._print(
                 "iAlarmMkPushClient._keepalive: Transport not ready, cannot send message."
