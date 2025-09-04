@@ -23,7 +23,7 @@ class SensorData:
     """Struttura dati dei sensori."""
 
     index: int
-    name: str
+    zone_name: str
     is_on: bool
 
 @dataclass
@@ -106,7 +106,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     sensor = {
                         "index": index,
                         "unique_id": id_sensor,
-                        "name": zones[index].get("Name", "no name"),
+                        "zone_name": zones[index].get("Name", "Unamed"),
                         "zone_type": int(zones[index].get("Type", 0)),
                     }
                     SENSOR_CONFIG.append(sensor)
@@ -120,7 +120,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         for sc in SENSOR_CONFIG:
             iAlarmSensor = IAlarmmkSensor(
                 self,
-                sc["name"],
+                sc["zone_name"],
                 sc["index"],
                 sc["unique_id"],
                 sc["zone_type"],
@@ -266,11 +266,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     for _idx, sensor in enumerate(self.sensors):
                         sensor: IAlarmmkSensor
                         sensorData: SensorData = SensorData(
-                            index=sensor.index, name=sensor.name, is_on=None
+                            index=sensor.index, zone_name=sensor.zone_name, is_on=None
                         )
                         state: int = status[int(sensor.index)]
 
-                        log_message += f"\t- {sensor.name}: state {state} --> "
+                        log_message += f"\t- {sensor.zone_name}: state {state} --> "
 
                         # Verifica se la zona è persa
                         if state & self.hub.ialarmmk.ZONE_LOSS:
@@ -293,7 +293,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                         else:
                             sensorData.is_on = None
                             _LOGGER.warning(
-                                "%s: state (Sconosciuto) %s \n", sensorData.name, bin(state)
+                                "%s: state (Sconosciuto) %s \n", sensorData.zone_name, bin(state)
                             )
 
                         # Aggiorna gli attributi di stato extra

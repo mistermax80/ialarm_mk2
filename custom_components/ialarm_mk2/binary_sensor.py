@@ -44,10 +44,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     """Representation of a iAlarm Status Sensor."""
 
+    _attr_has_entity_name = True
+    _attr_name = None
+
     def __init__(
         self,
         coordinator: DataUpdateCoordinator,
-        name: str,
+        zone_name: str,
         index: int,
         unique_id: str,
         zone_type: int,
@@ -55,8 +58,8 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = unique_id
-        self._attr_name = name
         self._attr_index: int = index
+        self._attr_zone_name: str = zone_name
         self._attr_zone_type: str = zone_type
         self._attr_low_battery: bool = None
         self._attr_loss: bool = None
@@ -77,9 +80,9 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         # Types: 0: Disabilitata, 1: Ritardata, 2: Perimetrale, 3:Interna, 4: Emergenza, 5: Attiva 24 ore, 6: Incendio, 7: Chiavi
         match self._attr_zone_type:
             case 1 | 2:
-                if "port" in self._attr_name.lower():
+                if "port" in self._attr_zone_name.lower():
                     return BinarySensorDeviceClass.DOOR
-                if "intern" in self._attr_name.lower():
+                if "intern" in self._attr_zone_name.lower():
                     return BinarySensorDeviceClass.MOTION
                 return BinarySensorDeviceClass.WINDOW
             case 3:
@@ -87,7 +90,7 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             case 4 | 5:
                 return BinarySensorDeviceClass.PROBLEM
             case 6:
-                if "gas" in self._attr_name.lower():
+                if "gas" in self._attr_zone_name.lower():
                     return BinarySensorDeviceClass.GAS
                 return BinarySensorDeviceClass.SMOKE
             case 0 | _:
@@ -98,6 +101,11 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     def index(self) -> int:
         """Return sensor index."""
         return self._attr_index
+
+    @property
+    def zone_name(self) -> int:
+        """Return sensor index."""
+        return self._attr_zone_name
 
     def set_extra_state_attributes(
         self, low_battery: bool, loss: bool, bypass: bool, last_check
@@ -112,6 +120,8 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Ritorna gli attributi personalizzati dinamici."""
         return {
+            "zone_number": self._attr_index,
+            "serial_number": self._attr_unique_id,
             "low_battery": self._attr_low_battery,
             "loss": self._attr_loss,
             "bypass": self._attr_bypass,
@@ -122,9 +132,10 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     def device_info(self):
         """Device Sensor Info."""
         return {
-            "identifiers": {(DOMAIN, self._attr_name)},
-            "name": self._attr_name,
+            "identifiers": {(DOMAIN, self._attr_unique_id)},
+            "name": self._attr_zone_name,
+            "serial_number": self._attr_unique_id,
             "manufacturer": "antifurto 365",
-            "model": "Sensor",
+            "model": "Sensore",
             "via_device": (DOMAIN, self.coordinator.hub.username),
         }

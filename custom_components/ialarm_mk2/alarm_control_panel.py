@@ -55,18 +55,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEntity):
     """Representation of an iAlarm-MK device."""
 
+    _attr_has_entity_name = True
+    _attr_name = None
+    _attr_icon = "mdi:security"
+
     _attr_supported_features = (
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
         | AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS
     )
-    _attr_name = "iAlarm-MK"
-    _attr_icon = "mdi:security"
 
     def __init__(self, coordinator: iAlarmMk2Coordinator) -> None:
         """Initialize the alarm panel."""
         super().__init__(coordinator)
-        self._attr_name = coordinator.hub.name
         self._attr_unique_id = coordinator.hub.username
         self.code_arm_required = False
 
@@ -101,7 +102,7 @@ class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEn
         """Device Alarm Info."""
         return {
             "identifiers": {(DOMAIN, self.coordinator.hub.username)},
-            "name": self._attr_name,
+            "name": self.coordinator.hub.name,
             "manufacturer": "antifurto 365",
             "model": "Centrale Allarme",
             "connections": {(dr.CONNECTION_NETWORK_MAC, self.coordinator.hub.mac)},

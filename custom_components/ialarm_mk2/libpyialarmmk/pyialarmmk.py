@@ -1050,6 +1050,10 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
     def handle_stop_connect(self):
         """Ferma il keepalive asincrono usando il loop di asyncio."""
         self._print("iAlarmMkPushClient.handle_stop_connect: stop keepalive task.")
+        if hasattr(self, "_keepalive_task") and self._keepalive_task is not None:
+            self._keepalive_task.cancel()
+            self._keepalive_task = None
+        self._close()
         self._task_cancelled = True
 
     def handle_error(self):
