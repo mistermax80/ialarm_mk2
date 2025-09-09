@@ -10,8 +10,8 @@
 !hacs.json
 
 # Riammetti la cartella custom_components e tutto il suo contenuto
-!custom_components/ialarm_mk2/
-!custom_components/ialarm_mk2/**
+!config/custom_components/ialarm_mk2/
+!config/custom_components/ialarm_mk2/**
 
 # Ignora tutti i file pyc e le cartelle __pycache__
 *.pyc
