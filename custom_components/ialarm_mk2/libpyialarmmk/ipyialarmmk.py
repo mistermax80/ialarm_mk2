@@ -18,12 +18,10 @@ import asyncio
 from datetime import datetime
 import json
 import logging
-import threading
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
 
-from ..const import IALARMMK_P2P_PREFIX_TASK_NAME
 from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -99,14 +97,6 @@ class iAlarmMkInterface:
         """set_callback."""
         self.callback = callback
         self.callback_only_status = callback_only_status
-
-    def get_threads(self) -> int:
-        """Recupera il numero di threads attivi."""
-        threads = threading.enumerate()
-        specific_threads = [t for t in threads if t.name.startswith(IALARMMK_P2P_PREFIX_TASK_NAME)]
-        for thread in specific_threads:
-            _LOGGER.debug(f"Active thread: {thread.name}")  # noqa: G004
-        return len(specific_threads)
 
     async def subscribe(self, task_name: str):
         """Gestisce la sottoscrizione con log migliorati."""

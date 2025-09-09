@@ -32,7 +32,7 @@ class IAlarmMkHub:
         self.scan_interval: int = scan_interval
         self.mac: str = None
         self.name: str = None
-        self.state: int = None
+        #self.state: int = None
         self.changed_by: str = None
         self.lastRealUpdateStatus = None
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(

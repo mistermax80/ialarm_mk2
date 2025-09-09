@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .binary_sensor import IAlarmmkSensor
 from .const import DOMAIN, IALARMMK_P2P_PREFIX_TASK_NAME
 from .hub import IAlarmMkHub
+from .util import get_active_tasks
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,13 +25,13 @@ class SensorData:
 
     index: int
     zone_name: str
-    is_on: bool
+    state: int
 
 @dataclass
 class AlarmData:
     """Struttura dati dell'allarme."""
 
-    state: int
+    state: int | None = None
     temporary_state: str | None = None
 
 @dataclass
@@ -54,13 +55,12 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=hub.scan_interval),
         )
         self.hub: IAlarmMkHub = hub
-        self._subscription_task = None
         self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
+        self._subscription_task = None
 
         self.sensors: list[IAlarmmkSensor] = []
-
-        # Allarme inizializzato con stato fittizio (es. 0 = disinserito)
-        alarm_data = AlarmData(state=0)
+        # Allarme inizializzato
+        alarm_data = AlarmData()
         # Lista vuota di sensori, se ancora non disponibili
         sensors_data: list[SensorData] = []
         # Inizializzazione completa dell'oggetto Data
@@ -78,9 +78,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
             # Start the subscription in the background
 
-            num_treads = self.hub.ialarmmk.get_threads()
-            _LOGGER.debug(f"Check if exist threads for '{IALARMMK_P2P_PREFIX_TASK_NAME}': {num_treads}")  # noqa: G004
-            if num_treads < 1:
+            tasks = get_active_tasks(IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS")
+            _LOGGER.debug(f"Check if exist threads for '{IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS"}': {len(tasks)}")  # noqa: G004
+            if len(tasks) < 1:
                 task_name = f"{IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS"}_{random.randint(100, 999)}"
                 self._subscription_task = asyncio.create_task(
                     self.hub.ialarmmk.subscribe(task_name),
@@ -133,16 +133,16 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         _LOGGER.debug(
             "Old state: %s(%s)",
-            self.hub.ialarmmk.status_dict.get(self.hub.state),
-            self.hub.state,
+            self.hub.ialarmmk.status_dict.get(self.data.alarm_data.state),
+            self.data.alarm_data.state,
         )
         status = event_data.get("Status")
         if status is not None:
-            self.hub.state = status
+            self.data.alarm_data.state = status
         _LOGGER.debug(
             "New state: %s(%s)",
-            self.hub.ialarmmk.status_dict.get(self.hub.state),
-            self.hub.state,
+            self.hub.ialarmmk.status_dict.get(self.data.alarm_data.state),
+            self.data.alarm_data.state,
         )
 
         lastRealUpdateStatus = event_data.get("LastRealUpdateStatus")
@@ -161,12 +161,12 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         _LOGGER.debug(
             "Old state: %s(%s)",
-            self.hub.ialarmmk.status_dict.get(self.hub.state),
-            self.hub.state,
+            self.hub.ialarmmk.status_dict.get(self.data.alarm_data.state),
+            self.data.alarm_data.state,
         )
         status = data_in.get("Status")
         if status is not None:
-            self.hub.state = status
+            self.data.alarm_data.state = status
         _LOGGER.debug(
             "New state: %s(%s)", self.hub.ialarmmk.status_dict.get(status), status
         )
@@ -196,11 +196,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         """Update the data and notify about the new state."""
         _LOGGER.debug(
             "Update the data status: %s(%s)",
-            self.hub.ialarmmk.status_dict.get(self.hub.state),
-            self.hub.state,
+            self.hub.ialarmmk.status_dict.get(self.data.alarm_data.state),
+            self.data.alarm_data.state,
         )
         return_data:CoordinatorData = self.data
-        return_data.alarm_data.state = self.hub.state
+        return_data.alarm_data.state = self.data.alarm_data.state
         _LOGGER.debug("return_data: %s", return_data)
         self.async_set_updated_data(return_data)
 
@@ -239,7 +239,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 self.hub.ialarmmk.status_dict.get(status),
                 status,
             )
-            self.hub.state = status
+            alarm_data.state = status
 
             tz = ZoneInfo(self.hass.config.time_zone)
             current_time = datetime.now(tz)
@@ -259,42 +259,16 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Retrieve last sensors status.")
                     _LOGGER.debug("Status: %s", status)
                     self.num_read_ok += 1
-
+                    log = ""
                     # Inizializza un messaggio di log e lo stato dei sensori
-                    log_message = "\n"
-
                     for _idx, sensor in enumerate(self.sensors):
                         sensor: IAlarmmkSensor
-                        sensorData: SensorData = SensorData(
-                            index=sensor.index, zone_name=sensor.zone_name, is_on=None
-                        )
                         state: int = status[int(sensor.index)]
+                        sensorData: SensorData = SensorData(
+                            index=sensor.index, zone_name=sensor.zone_name, state=state
+                        )
 
-                        log_message += f"\t- {sensor.zone_name}: state {state} --> "
-
-                        # Verifica se la zona è persa
-                        if state & self.hub.ialarmmk.ZONE_LOSS:
-                            sensorData.is_on = None
-                            log_message += f"(Persa) {bin(state)} \n"
-                        # Verifica se la zona non è utilizzata
-                        elif state == self.hub.ialarmmk.ZONE_NOT_USED:
-                            sensorData.is_on = None
-                            log_message += f"(Non Usato) {bin(state)} \n"
-                        # Verifica se la zona è in uso
-                        elif state & self.hub.ialarmmk.ZONE_IN_USE:
-                            # Verifica se la zona è in uso e in fault (aperto)
-                            if state & self.hub.ialarmmk.ZONE_FAULT:
-                                sensorData.is_on = True
-                                log_message += f"(Aperto) {bin(state)} \n"
-                            # Verifica se la zona è in uso e non in fault (chiuso)
-                            else:
-                                sensorData.is_on = False
-                                log_message += f"(Chiuso) {bin(state)} \n"
-                        else:
-                            sensorData.is_on = None
-                            _LOGGER.warning(
-                                "%s: state (Sconosciuto) %s \n", sensorData.zone_name, bin(state)
-                            )
+                        log += f"\n- {sensor.zone_name}, state:{state}"
 
                         # Aggiorna gli attributi di stato extra
                         sensor.set_extra_state_attributes(
@@ -304,10 +278,6 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                             current_time,
                         )
                         return_data.sensors_data.append(sensorData)
-
-                    # Logga il messaggio finale
-                    _LOGGER.debug(log_message)
-
                     break  # Se il blocco riesce, esci dal ciclo
                 except Exception as e:
                     self.num_read_ko += 1
@@ -337,6 +307,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             _LOGGER.error("Error fetching data: %s", e)
             raise UpdateFailed("Connection error") from e
 
+        _LOGGER.debug(log)
         _LOGGER.debug("return_data: %s", return_data)
 
         return return_data

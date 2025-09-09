@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
+from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ async def async_setup_entry(
     _LOGGER.debug(
         "Set up %d sensors: %s",
         len(coordinator.sensors),
-        [s.name for s in coordinator.sensors],
+        [s.zone_name for s in coordinator.sensors],
     )
 
 
@@ -69,10 +70,39 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return whether the sensor is on."""
-        _LOGGER.debug("Getting is_on for sensor index: %s", self._attr_index)
+        log_message= f"Getting is_on for sensor: {self._attr_zone_name}({self._attr_index}) --> "
         self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
         sensor = self._sensor_map.get(self._attr_index)
-        return sensor.is_on if sensor else None
+        _value_is_on = None
+
+        log_message += f"{sensor.state}: "
+
+        # Verifica se la zona è persa
+        if sensor.state & ipyialarmmk.iAlarmMkInterface.ZONE_LOSS:
+            _value_is_on = None
+            log_message += f"(Persa) {bin(sensor.state)}"
+        # Verifica se la zona non è utilizzata
+        elif sensor.state == ipyialarmmk.iAlarmMkInterface.ZONE_NOT_USED:
+            _value_is_on = None
+            log_message += f"(Non Usato) {bin(sensor.state)}"
+        # Verifica se la zona è in uso
+        elif sensor.state & ipyialarmmk.iAlarmMkInterface.ZONE_IN_USE:
+            # Verifica se la zona è in uso e in fault (aperto)
+            if sensor.state & ipyialarmmk.iAlarmMkInterface.ZONE_FAULT:
+                _value_is_on = True
+                log_message += f"(Aperto) {bin(sensor.state)}"
+            # Verifica se la zona è in uso e non in fault (chiuso)
+            else:
+                _value_is_on = False
+                log_message += f"(Chiuso) {bin(sensor.state)}"
+        else:
+            _value_is_on = None
+            _LOGGER.warning(
+                "%s: sensor.state (Sconosciuto) %s \n", sensor.zone_name, bin(sensor.state)
+            )
+
+        _LOGGER.debug(log_message)
+        return _value_is_on
 
     @property
     def device_class(self) -> BinarySensorDeviceClass | None:
