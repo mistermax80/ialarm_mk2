@@ -1,0 +1,35 @@
+arm_away_alarm:
+  alias: "Attiva Allarme"
+  icon: "mdi:home-lock"
+  mode: single
+  sequence:
+    - service: alarm_control_panel.alarm_arm_away
+      target:
+        entity_id: alarm_control_panel.ialarm_mk
+
+arm_stay_alarm:
+  alias: "Attiva Allarme in casa"
+  icon: "mdi:home-map-marker"
+  mode: single
+  sequence:
+    - service: alarm_control_panel.alarm_arm_home
+      target:
+        entity_id: alarm_control_panel.ialarm_mk
+
+arm_partial_alarm:
+  alias: "Attiva Allarme personalizzato"
+  icon: "mdi:home-search"
+  mode: single
+  sequence:
+    - service: alarm_control_panel.alarm_arm_custom_bypass
+      target:
+        entity_id: alarm_control_panel.ialarm_mk
+
+disarm_alarm:
+  alias: "Disattiva Allarme"
+  icon: "mdi:home-lock-open"
+  mode: single
+  sequence:
+    - service: alarm_control_panel.alarm_disarm
+      target:
+        entity_id: alarm_control_panel.ialarm_mk

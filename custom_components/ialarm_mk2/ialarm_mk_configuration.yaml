@@ -1,0 +1,19 @@
+template:
+  - sensor:
+      - name: "iAlarm MK Stato"
+        state: "{{ states('alarm_control_panel.ialarm_mk') }}"
+        icon: >-
+          {% set st = states('alarm_control_panel.ialarm_mk') %}
+          {% if st == 'disarmed' %}
+            mdi:home-lock-open
+          {% elif st == 'armed_away' %}
+            mdi:home-lock
+          {% elif st == 'armed_home' %}
+            mdi:home-map-marker
+          {% elif st == 'armed_custom_bypass' %}
+            mdi:home-search
+          {% elif st == 'triggered' %}
+            mdi:bell-alert
+          {% else %}
+            mdi:shield
+          {% endif %}
