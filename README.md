@@ -1,7 +1,8 @@
 # Home Assistant custom integration for iAlarm MK
 
-[![HACS][hacs-shield]][hacs]
-[![Release][releases-shield]][releases]
+[![HACS][hacs-custom-shield]][hacs]
+[![Stable Release][stable-shield]][stable]
+[![Latest Pre-Release][prerelease-shield]][prerelease]
 [![Downloads][downloads-shield]][downloads]
 [![Stars][stars-shield]][stars]
 [![Forks][forks-shield]][forks]
@@ -27,7 +28,7 @@ Currently, it is possible to:
 - Check the battery status of sensors: for all sensors
 - Check the bypass status: for all sensors
 - Check the connection status: for all sensors
-- Listen event: ialarm_mk2_event
+- Listen event: `ialarm_mk2_event`
 
 In the future, it will be possible to:
 - Configure sensors
@@ -37,17 +38,79 @@ In the future, it will be possible to:
 
 Currently, the integration uses the included `pyialarm` library, but it is planned to migrate and maintain it externally.
 
-Special thanks to:
-- https://github.com/wildstray/meian-client
-- https://github.com/RyuzakiKK/pyialarm
-- https://github.com/bigmoby/pymeianlike
-- https://github.com/maxill1/ialarm-mqtt
+---
 
-[hacs-shield]: https://img.shields.io/badge/HACS-Available-brightgreen?style=for-the-badge
+## 🔧 Installation
+
+### 📦 Via HACS (Recommended)
+
+This integration supports **[HACS](https://hacs.xyz/)**, but is **not available in the default store**.  
+You need to add it manually as a **custom repository**:
+
+1. In Home Assistant, open **HACS → Integrations**
+2. Click the **three-dot menu (⋮)** in the top right
+3. Select **"Custom repositories"**
+4. Enter the URL:
+
+   ```
+   https://github.com/mistermax80/ialarm_mk2
+   ```
+
+5. Set category to **"Integration"**, then click **Add**
+6. You will now find **iAlarm MK** in the list of integrations
+7. Install it and restart Home Assistant
+
+### 📁 Manual Installation (Alternative)
+
+1. Clone or download this repository:
+
+   ```bash
+   git clone https://github.com/mistermax80/ialarm_mk2
+   ```
+
+2. Copy the `ialarm_mk2` folder to:
+
+   ```
+   <your_config_directory>/custom_components/ialarm_mk2/
+   ```
+
+3. Restart Home Assistant
+
+---
+
+## 🧩 Configuration
+
+After installation, go to:
+
+**Settings → Devices & Services → Add Integration**,  
+search for **iAlarm MK**, and follow the setup.
+
+---
+
+## ℹ️ HACS Availability
+
+> ⚠️ Even though the badge says "HACS Custom Repository", this integration is **not in the HACS default store**.  
+> It must be added manually via the **Custom Repositories** option.
+
+---
+
+## 🙏 Special thanks to:
+
+- https://github.com/wildstray/meian-client  
+- https://github.com/RyuzakiKK/pyialarm  
+- https://github.com/bigmoby/pymeianlike  
+- https://github.com/maxill1/ialarm-mqtt  
+
+---
+
+[hacs-custom-shield]: https://img.shields.io/badge/HACS-Custom%20Repository-blue?style=for-the-badge
 [hacs]: https://hacs.xyz/repository/github/mistermax80/ialarm_mk2
 
-[releases-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?include_prereleases&style=for-the-badge
-[releases]: https://github.com/mistermax80/ialarm_mk2/releases
+[stable-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?label=Stable&sort=semver&style=for-the-badge
+[stable]: https://github.com/mistermax80/ialarm_mk2/releases/latest
+
+[prerelease-shield]: https://img.shields.io/github/v/release/mistermax80/ialarm_mk2?include_prereleases&label=Pre-Release&sort=semver&style=for-the-badge
+[prerelease]: https://github.com/mistermax80/ialarm_mk2/releases
 
 [downloads-shield]: https://img.shields.io/github/downloads/mistermax80/ialarm_mk2/total?style=for-the-badge
 [downloads]: https://github.com/mistermax80/ialarm_mk2/releases
