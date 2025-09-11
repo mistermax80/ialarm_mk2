@@ -971,6 +971,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self.transport: asyncio.transports.Transport | None = None
         self._keepalive_task = None
         self._task_cancelled = False
+        self.last_keeplive_ts = 0.0
 
     def connection_made(self, transport: asyncio.transports.Transport) -> None:
         """Connessione push all'allarme."""
@@ -1077,6 +1078,8 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
 
             if head == b"%maI":
                 self._print("iAlarmMkPushClient.handle_read: keepalive message received.")
+                self.last_keeplive_ts = time.time()
+                self._print(f"iAlarmMkPushClient.handle_read: set keeplive timestamp: {self.last_keeplive_ts}")
                 self.start_keepalive()
             elif head == b"@ieM":
                 self._print("iAlarmMkPushClient.handle_read: pairing message received.")
@@ -1103,6 +1106,7 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                         self._print(
                             "iAlarmMkPushClient.handle_read: Device successfully paired."
                         )
+                        self.last_keeplive_ts = time.time()
                 else:
                     self._print(
                         "iAlarmMkPushClient.handle_read: No pairing information found."
@@ -1176,12 +1180,15 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
     def _close(self):
         self._print("iAlarmMkPushClient._close: Device connection close!")
         try:
-            if self.transport.is_closing() is False:
+            if self.transport and not self.transport.is_closing():
                 self.transport.close()
+
+            if self.on_con_lost and not self.on_con_lost.done():
                 self.on_con_lost.set_result(True)
+
         except Exception as e:
             self._print(
-                "iAlarmMkPushClient._close: Device connection close! Exception:{e}"
+                f"iAlarmMkPushClient._close: Device connection close! Exception: {e}"
             )
 
     async def _keepalive(self):

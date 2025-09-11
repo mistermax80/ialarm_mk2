@@ -1,6 +1,7 @@
 """Componente per porte e finestre."""
 
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
@@ -34,6 +35,14 @@ async def async_setup_entry(
         "Set up %d sensors: %s",
         len(coordinator.sensors),
         [s.zone_name for s in coordinator.sensors],
+    )
+
+    if hasattr(coordinator, "connectivity_sensor"):
+        async_add_entities(coordinator.connectivity_sensor, update_before_add=True)
+    _LOGGER.debug(
+        "Set up %d connectivity_sensor: %s",
+        len(coordinator.connectivity_sensor),
+        list(coordinator.connectivity_sensor),
     )
 
 
@@ -168,4 +177,54 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
             "manufacturer": "antifurto 365",
             "model": "Sensore",
             "via_device": (DOMAIN, self.coordinator.hub.username),
+        }
+
+
+class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
+    """Representation of a iAlarm Status Sensor."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = coordinator.hub.username
+        self._attr_name = "Connectivity"
+        self._attr_last_keeplive_ts = None
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the sensor is on."""
+        last_ts = self.coordinator.data.alarm_data.last_keeplive_ts
+        _LOGGER.debug("Retrieve last keeplive timestamp: %s", last_ts)
+        self._attr_last_keeplive_ts = last_ts
+        if last_ts is None:
+            # nessun keepalive ricevuto → consideriamo spento
+            return False
+        # differenza in secondi tra ora corrente e ultimo keepalive
+        diff = time.time() - last_ts
+        # se l'ultimo keepalive è entro 5 minuti → True, altrimenti False
+        return diff <= 5 * 60
+
+    @property
+    def device_class(self) -> BinarySensorDeviceClass | None:
+        """Return the class of this entity."""
+        return BinarySensorDeviceClass.CONNECTIVITY
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Aggiunge info aggiuntive sullo stato."""
+        last_ts = self.coordinator.data.alarm_data.last_keeplive_ts
+        if last_ts is not None:
+            return {"Last keeplive timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_ts))}
+        return {"Last keeplive timestamp": None}
+
+    @property
+    def device_info(self):
+        """Device Sensor Info."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.hub.username)},
         }

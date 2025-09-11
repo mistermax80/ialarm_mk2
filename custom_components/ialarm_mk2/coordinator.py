@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .binary_sensor import IAlarmmkSensor
+from .binary_sensor import IAlarmmkConnectivity, IAlarmmkSensor
 from .const import DOMAIN, IALARMMK_P2P_PREFIX_TASK_NAME
 from .hub import IAlarmMkHub
 from .util import get_active_tasks
@@ -33,6 +33,7 @@ class AlarmData:
 
     state: int | None = None
     temporary_state: str | None = None
+    last_keeplive_ts: float = 0.0
 
 @dataclass
 class CoordinatorData:
@@ -59,6 +60,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         self._subscription_task = None
 
         self.sensors: list[IAlarmmkSensor] = []
+        self.connectivity_sensor: list[IAlarmmkConnectivity] = []
         # Allarme inizializzato
         alarm_data = AlarmData()
         # Lista vuota di sensori, se ancora non disponibili
@@ -126,6 +128,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 sc["zone_type"],
             )
             self.sensors.append(iAlarmSensor)
+
+        iAlarmmkConnectivity = IAlarmmkConnectivity(self)
+        self.connectivity_sensor.append(iAlarmmkConnectivity)
 
     def callback(self, event_data: dict) -> None:
         """Handle status updates from iAlarm-MK."""
@@ -233,6 +238,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         return_data = CoordinatorData(alarm_data, sensors_data)
 
         try:
+            return_data.alarm_data.last_keeplive_ts = self.hub.ialarmmk.get_last_keeplive_ts()
             status: int = self.hub.ialarmmk.get_status()
             _LOGGER.debug(
                 "Updating internal state: %s(%s)",

@@ -193,6 +193,10 @@ class iAlarmMkInterface:
         self._cancelled = True  # Imposta il flag di cancellazione
         self.push_client.handle_stop_connect()
 
+    def get_last_keeplive_ts(self):
+        """Metodo per prendere l'ultimo timestamp ricevuto per il messaggio di keeplive."""
+        return self.push_client.last_keeplive_ts
+
     def _get_status(self):
         _LOGGER.debug("Retrieving DevStatus...")
         try:
