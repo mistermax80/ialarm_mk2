@@ -1,18 +1,41 @@
-# Ignora tutto nella root (file e cartelle)
+# =========================
+# Ignora tutto nella root tranne file essenziali e cartelle necessarie
+# =========================
+
+# Ignora tutto
 /*
 
-# Riammetti tutte le cartelle nella root (necessario per poter riammettere file dentro)
-/*/
-
-# Riammetti i file essenziali nella root
+# Riammetti file essenziali nella root
 !README.md
 !LICENSE
 !hacs.json
 
+# =========================
+# Riammetti cartelle necessarie
+# =========================
+
 # Riammetti la cartella custom_components e tutto il suo contenuto
+!custom_components/
 !custom_components/ialarm_mk2/
 !custom_components/ialarm_mk2/**
 
-# Ignora tutti i file pyc e le cartelle __pycache__
+# =========================
+# Ignora file generati da Python
+# =========================
+
 *.pyc
 __pycache__/
+
+# =========================
+# Altri file/dir da ignorare
+# =========================
+
+# Cartelle temporanee o log
+*.log
+*.tmp
+custom_components/hacs/
+custom_components/hacs/*
+custom_components/hacs/**
+custom_components/ialarm_controller/
+custom_components/ialarm_controller/*
+custom_components/ialarm_controller/** */

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant import data_entry_flow
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import (
     CONF_HOST,
     CONF_PASSWORD,
@@ -16,8 +22,9 @@ from homeassistant.const import (
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import selector
 
 from . import IAlarmMkHub, libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
@@ -67,7 +74,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     return {"title": data[CONF_USERNAME]}
 
 
-class ConfigFlow(ConfigFlow, domain=DOMAIN):
+class MyConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for iAlarm-MK Integration 2."""
 
     VERSION = 2
@@ -154,6 +161,79 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=STEP_RECONFIGURE_DATA_SCHEMA,
             errors=errors,
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> MyOptionsFlowHandler:
+        """Create the options flow."""
+        return MyOptionsFlowHandler()
+
+
+class MyOptionsFlowHandler(OptionsFlow):
+    """Options Flow per configurare dettagli per i sensori."""
+
+    async def async_step_init(self, user_input=None):
+        """Gestisce il form delle opzioni."""
+        coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
+        sensors = coordinator.data.sensors_data
+        _LOGGER.debug("Options flow started with coordinator id: %s", id(coordinator))
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            _LOGGER.debug("Raw user_input: %s", user_input)
+            clean_data = {}
+            for sensor in sensors:
+                key = f"last_battery_change_{sensor.unique_id}"
+                raw_value = user_input.get(key, "")
+                if raw_value:
+                    try:
+                        # validazione ISO
+                        parsed_date = datetime.datetime.strptime(
+                            raw_value, "%Y-%m-%d"
+                        ).date()
+                        if parsed_date > datetime.date.today():
+                            errors[key] = "future_date"
+                        else:
+                            clean_data[key] = parsed_date.isoformat()
+                    except Exception as e:  # noqa: BLE001
+                        _LOGGER.warning(
+                            "Invalid date '%s' for sensor %s, ignoring. Exeption was: %s",
+                            raw_value,
+                            key,
+                            e,
+                        )
+                        errors[key] = "data_invalid"
+                        #clean_data[key] = ""
+                else:
+                    clean_data[key] = ""
+
+            if not errors:
+                _LOGGER.debug("Cleaned user_input to save: %s", clean_data)
+                return self.async_create_entry(title="", data=clean_data)
+
+        # Costruire schema con stringa editabile
+        schema_dict = {}
+        schema_dict[
+            vol.Optional(
+                "Istruzioni",
+                default="Puoi inserire una data in formato YYYY-MM-DD (es: 2025-09-14) o vuoto per non attivare il calcolo stimato della batteria residua)",
+            )
+        ] = selector.TextSelector(selector.EntitySelectorConfig(read_only=True))
+
+        for sensor in sensors:
+            key = f"last_battery_change_{sensor.unique_id}"
+            if user_input is not None:
+                default = user_input.get(key, "")
+            else:
+                default = self.config_entry.options.get(key, "")
+            schema_dict[vol.Optional(key, default=default)] = str
+
+        schema = vol.Schema(schema_dict)
+        _LOGGER.debug("Final schema_dict: %s", schema_dict)
+
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
 
 
 class CannotConnect(HomeAssistantError):

@@ -2,8 +2,9 @@
 
 import asyncio
 from asyncio.timeouts import timeout
+import copy
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import logging
 import random
 import time
@@ -12,21 +13,24 @@ from zoneinfo import ZoneInfo
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .binary_sensor import IAlarmmkConnectivity, IAlarmmkSensor
 from .const import DOMAIN, IALARMMK_P2P_PREFIX_TASK_NAME
 from .hub import IAlarmMkHub
 from .util import get_active_tasks
 
 _LOGGER = logging.getLogger(__name__)
 
+
 @dataclass
 class SensorData:
     """Struttura dati dei sensori."""
 
     index: int
+    unique_id: str
     zone_name: str
+    zone_type: int
     state: int
-
+    last_fetch_time: datetime
+    last_battery_change_date: date
 @dataclass
 class AlarmData:
     """Struttura dati dell'allarme."""
@@ -35,12 +39,14 @@ class AlarmData:
     temporary_state: str | None = None
     last_keeplive_ts: float = 0.0
 
+
 @dataclass
 class CoordinatorData:
     """Struttura dati compessiva per gesione del coordinator.data ."""
 
     alarm_data: AlarmData
     sensors_data: list[SensorData]
+
 
 class iAlarmMk2Coordinator(DataUpdateCoordinator):
     """Class to manage fetching iAlarm-MK data."""
@@ -59,8 +65,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
         self._subscription_task = None
 
-        self.sensors: list[IAlarmmkSensor] = []
-        self.connectivity_sensor: list[IAlarmmkConnectivity] = []
+        # self.sensors: list[IAlarmmkSensor] = []
+        # self.sensors_bat: list[IAlarmmkSensorBattery] = []
+        # self.connectivity_sensor: list[IAlarmmkConnectivity] = []
         # Allarme inizializzato
         alarm_data = AlarmData()
         # Lista vuota di sensori, se ancora non disponibili
@@ -74,24 +81,28 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
     async def _async_setup(self):
         _LOGGER.info("Setup data updater...")
 
-        SENSOR_CONFIG = []
         try:
             # Registrazione listener di spegnimento
             self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
-            # Start the subscription in the background
 
-            tasks = get_active_tasks(IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS")
-            _LOGGER.debug(f"Check if exist threads for '{IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS"}': {len(tasks)}")  # noqa: G004
+            # Start the subscription in the background
+            tasks = get_active_tasks(IALARMMK_P2P_PREFIX_TASK_NAME + "SUBS")
+            _LOGGER.debug(
+                "Check if exist threads for '%s': %s",
+                IALARMMK_P2P_PREFIX_TASK_NAME + "SUBS",
+                len(tasks),
+            )
             if len(tasks) < 1:
-                task_name = f"{IALARMMK_P2P_PREFIX_TASK_NAME+"SUBS"}_{random.randint(100, 999)}"
+                task_name = f"{IALARMMK_P2P_PREFIX_TASK_NAME + 'SUBS'}_{random.randint(100, 999)}"
                 self._subscription_task = asyncio.create_task(
-                    self.hub.ialarmmk.subscribe(task_name),
-                    name=task_name
+                    self.hub.ialarmmk.subscribe(task_name), name=task_name
                 )
                 _LOGGER.debug("New Subscription Task: %s", self._subscription_task)
             else:
-                _LOGGER.warning("Existing Subscription Task: %s", self._subscription_task)
-                #TODO RECUPERARE IL THREAD E METTERLO IN _subscription_task OPPURE CHIUDERE IL PRECEDENTE E RIAPRIRLO NUOVO
+                _LOGGER.warning(
+                    "Existing Subscription Task: %s", self._subscription_task
+                )
+                # TODO RECUPERARE IL THREAD E METTERLO IN _subscription_task OPPURE CHIUDERE IL PRECEDENTE E RIAPRIRLO NUOVO
 
             self.hub.ialarmmk.ialarmmkClient.login()
             _LOGGER.debug("Login OK.")
@@ -103,34 +114,29 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hub.ialarmmk.ialarmmkClient.logout()
             _LOGGER.debug("Logout OK.")
 
+            alarm_data = AlarmData(0)
+            sensors_data: list[SensorData] = []
+
             for index, id_sensor in enumerate(idsSensors):
                 if id_sensor:
-                    sensor = {
-                        "index": index,
-                        "unique_id": id_sensor,
-                        "zone_name": zones[index].get("Name", "Unamed"),
-                        "zone_type": int(zones[index].get("Type", 0)),
-                    }
-                    SENSOR_CONFIG.append(sensor)
+                    sensor = SensorData(
+                        index,
+                        id_sensor,
+                        zones[index].get("Name", "Unamed"),
+                        int(zones[index].get("Type", 0)),
+                        0,
+                        None,
+                        self.config_entry.options.get(f'last_battery_change_{id_sensor}', None)
+                    )
+                    sensors_data.append(sensor)
+            _LOGGER.debug("Sensors sensors_data: %s", sensors_data)
+            self.data = CoordinatorData(alarm_data, sensors_data)
 
         except Exception:
             _LOGGER.exception("Error in setup entities.")
             self.hub.ialarmmk.ialarmmkClient.logout()
             _LOGGER.error("Logout OK.")
             raise
-
-        for sc in SENSOR_CONFIG:
-            iAlarmSensor = IAlarmmkSensor(
-                self,
-                sc["zone_name"],
-                sc["index"],
-                sc["unique_id"],
-                sc["zone_type"],
-            )
-            self.sensors.append(iAlarmSensor)
-
-        iAlarmmkConnectivity = IAlarmmkConnectivity(self)
-        self.connectivity_sensor.append(iAlarmmkConnectivity)
 
     def callback(self, event_data: dict) -> None:
         """Handle status updates from iAlarm-MK."""
@@ -204,7 +210,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hub.ialarmmk.status_dict.get(self.data.alarm_data.state),
             self.data.alarm_data.state,
         )
-        return_data:CoordinatorData = self.data
+        return_data: CoordinatorData = self.data
         return_data.alarm_data.state = self.data.alarm_data.state
         _LOGGER.debug("return_data: %s", return_data)
         self.async_set_updated_data(return_data)
@@ -221,7 +227,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             async with timeout(30):
                 return await self.hass.async_add_executor_job(self._fetch_device_data)
 
-            #await self.async_update_data()
+            # await self.async_update_data()
         except Exception as error:
             _LOGGER.exception("Error during fetch data.")
             raise UpdateFailed(error) from error
@@ -231,24 +237,21 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         _LOGGER.debug("Coordinator data: %s", self.data)
 
-        alarm_data = AlarmData(0)
-        # Lista vuota di sensori, se ancora non disponibili
-        sensors_data: list[SensorData] = []
-        # Inizializzazione completa dell'oggetto Data
-        return_data = CoordinatorData(alarm_data, sensors_data)
+        return_data = copy.deepcopy(self.data)
 
         try:
-            return_data.alarm_data.last_keeplive_ts = self.hub.ialarmmk.get_last_keeplive_ts()
+            return_data.alarm_data.last_keeplive_ts = (
+                self.hub.ialarmmk.get_last_keeplive_ts()
+            )
             status: int = self.hub.ialarmmk.get_status()
             _LOGGER.debug(
                 "Updating internal state: %s(%s)",
                 self.hub.ialarmmk.status_dict.get(status),
                 status,
             )
-            alarm_data.state = status
+            return_data.alarm_data.state = status
 
             tz = ZoneInfo(self.hass.config.time_zone)
-            current_time = datetime.now(tz)
             attempts = 0
             max_attempts = 3
 
@@ -265,25 +268,16 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Retrieve last sensors status.")
                     _LOGGER.debug("Status: %s", status)
                     self.num_read_ok += 1
-                    log = ""
+
                     # Inizializza un messaggio di log e lo stato dei sensori
-                    for _idx, sensor in enumerate(self.sensors):
-                        sensor: IAlarmmkSensor
+                    log = ""
+                    for _idx, sensor in enumerate(return_data.sensors_data):
+                        sensor: SensorData
                         state: int = status[int(sensor.index)]
-                        sensorData: SensorData = SensorData(
-                            index=sensor.index, zone_name=sensor.zone_name, state=state
-                        )
+                        sensor.state = state
+                        sensor.last_fetch_time = datetime.now(tz)
 
                         log += f"\n- {sensor.zone_name}, state:{state}"
-
-                        # Aggiorna gli attributi di stato extra
-                        sensor.set_extra_state_attributes(
-                            bool(state & self.hub.ialarmmk.ZONE_LOW_BATTERY),
-                            bool(state & self.hub.ialarmmk.ZONE_LOSS),
-                            bool(state & self.hub.ialarmmk.ZONE_BYPASS),
-                            current_time,
-                        )
-                        return_data.sensors_data.append(sensorData)
                     break  # Se il blocco riesce, esci dal ciclo
                 except Exception as e:
                     self.num_read_ko += 1

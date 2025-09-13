@@ -111,7 +111,7 @@ class iAlarmMkInterface:
                 if self._cancelled:
                     _LOGGER.debug("[%s] Task cancelled. Exit loop.", task_name)
                     # quà potrei fermare il keeplive
-                    self.push_client.handle_connect
+                    self.push_client.handle_connect()
                     break
 
                 loop = asyncio.get_running_loop()
@@ -195,6 +195,8 @@ class iAlarmMkInterface:
 
     def get_last_keeplive_ts(self):
         """Metodo per prendere l'ultimo timestamp ricevuto per il messaggio di keeplive."""
+        if self.push_client is None:
+            return None
         return self.push_client.last_keeplive_ts
 
     def _get_status(self):

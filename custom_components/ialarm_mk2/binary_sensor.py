@@ -9,6 +9,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -18,6 +19,7 @@ from homeassistant.helpers.update_coordinator import (
 
 from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
+from .coordinator import iAlarmMk2Coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,21 +31,26 @@ async def async_setup_entry(
     _LOGGER.info("Set up sensors based on a config entry.")
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     _LOGGER.debug("Setup with coordinator id: %s", id(coordinator))
-    if hasattr(coordinator, "sensors"):
-        async_add_entities(coordinator.sensors, update_before_add=False)
-    _LOGGER.debug(
-        "Set up %d sensors: %s",
-        len(coordinator.sensors),
-        [s.zone_name for s in coordinator.sensors],
-    )
+    if hasattr(coordinator, "data") and hasattr(coordinator.data, "sensors_data"):
+        _LOGGER.debug(
+            "Set up %d sensors: %s",
+            len(coordinator.data.sensors_data),
+            [s.zone_name for s in coordinator.data.sensors_data],
+        )
+        list_sensors: list[IAlarmmkSensor] = []
+        for sc in coordinator.data.sensors_data:
+            iAlarmSensor = IAlarmmkSensor(
+                coordinator,
+                sc.zone_name,
+                sc.index,
+                sc.unique_id,
+                sc.zone_type,
+            )
+            list_sensors.append(iAlarmSensor)
+        async_add_entities(list_sensors, update_before_add=False)
 
-    if hasattr(coordinator, "connectivity_sensor"):
-        async_add_entities(coordinator.connectivity_sensor, update_before_add=True)
-    _LOGGER.debug(
-        "Set up %d connectivity_sensor: %s",
-        len(coordinator.connectivity_sensor),
-        list(coordinator.connectivity_sensor),
-    )
+        _LOGGER.debug("Set up connectivty sensor.")
+        async_add_entities([IAlarmmkConnectivity(coordinator)], update_before_add=False)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -59,7 +66,7 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
 
     def __init__(
         self,
-        coordinator: DataUpdateCoordinator,
+        coordinator: iAlarmMk2Coordinator,
         zone_name: str,
         index: int,
         unique_id: str,
@@ -79,7 +86,9 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return whether the sensor is on."""
-        log_message= f"Getting is_on for sensor: {self._attr_zone_name}({self._attr_index}) --> "
+        log_message = (
+            f"Getting is_on for sensor: {self._attr_zone_name}({self._attr_index}) --> "
+        )
         self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
         sensor = self._sensor_map.get(self._attr_index)
         _value_is_on = None
@@ -107,7 +116,9 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         else:
             _value_is_on = None
             _LOGGER.warning(
-                "%s: sensor.state (Sconosciuto) %s \n", sensor.zone_name, bin(sensor.state)
+                "%s: sensor.state (Sconosciuto) %s \n",
+                sensor.zone_name,
+                bin(sensor.state),
             )
 
         _LOGGER.debug(log_message)
@@ -146,25 +157,20 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         """Return sensor index."""
         return self._attr_zone_name
 
-    def set_extra_state_attributes(
-        self, low_battery: bool, loss: bool, bypass: bool, last_check
-    ):
-        """set_extra_state_attributes."""
-        self._attr_low_battery = low_battery
-        self._attr_loss = loss
-        self._attr_bypass = bypass
-        self._attr_last_check = last_check
-
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Ritorna gli attributi personalizzati dinamici."""
+        self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
+        sensor = self._sensor_map.get(self._attr_index)
         return {
             "zone_number": self._attr_index,
             "serial_number": self._attr_unique_id,
-            "low_battery": self._attr_low_battery,
-            "loss": self._attr_loss,
-            "bypass": self._attr_bypass,
-            "last_check": self._attr_last_check,
+            "low_battery": bool(
+                sensor.state & self.coordinator.hub.ialarmmk.ZONE_LOW_BATTERY
+            ),
+            "loss": bool(sensor.state & self.coordinator.hub.ialarmmk.ZONE_LOSS),
+            "bypass": bool(sensor.state & self.coordinator.hub.ialarmmk.ZONE_BYPASS),
+            "last_check": sensor.last_fetch_time,
         }
 
     @property
@@ -181,18 +187,17 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
 
 
 class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
-    """Representation of a iAlarm Status Sensor."""
+    """Representation of a iAlarm Status Sensor for connectivity."""
 
     _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(
-        self,
-        coordinator: DataUpdateCoordinator
-    ) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = coordinator.hub.username
-        self._attr_name = "Connectivity"
+        # self._attr_name = "Connectivity"
         self._attr_last_keeplive_ts = None
 
     @property
@@ -210,16 +215,15 @@ class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
         return diff <= 5 * 60
 
     @property
-    def device_class(self) -> BinarySensorDeviceClass | None:
-        """Return the class of this entity."""
-        return BinarySensorDeviceClass.CONNECTIVITY
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Aggiunge info aggiuntive sullo stato."""
         last_ts = self.coordinator.data.alarm_data.last_keeplive_ts
         if last_ts is not None:
-            return {"Last keeplive timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_ts))}
+            return {
+                "Last keeplive timestamp": time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.localtime(last_ts)
+                )
+            }
         return {"Last keeplive timestamp": None}
 
     @property
