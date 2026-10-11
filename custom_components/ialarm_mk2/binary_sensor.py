@@ -162,8 +162,20 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         """Ritorna gli attributi personalizzati dinamici."""
         self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
         sensor = self._sensor_map.get(self._attr_index)
+
+        zone_type_labels = {
+            0: "disabled",
+            1: "entry delay",
+            2: "perimeter",
+            3: "interior",
+            4: "emergency",
+            5: "24-Hour",
+            6: "fire",
+            7: "keyswitch",
+        }
         return {
             "zone_number": self._attr_index,
+            "zone_type_name": zone_type_labels.get(self._attr_zone_type, "Unknown"),
             "serial_number": self._attr_unique_id,
             "low_battery": bool(
                 sensor.state & self.coordinator.hub.ialarmmk.ZONE_LOW_BATTERY

@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import data_entry_flow
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -25,8 +24,10 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
+from homeassistant.util import dt as dt_util
 
-from . import IAlarmMkHub, libpyialarmmk as ipyialarmmk
+from . import IAlarmMkHub
+from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -176,64 +177,110 @@ class MyOptionsFlowHandler(OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Gestisce il form delle opzioni."""
+        _LOGGER.debug("Options flow invoked with user_input=%r", user_input)
+
         coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
         sensors = coordinator.data.sensors_data
-        _LOGGER.debug("Options flow started with coordinator id: %s", id(coordinator))
+        _LOGGER.debug("Options flow sensors: %s", len(sensors))
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            _LOGGER.debug("Raw user_input: %s", user_input)
+            _LOGGER.debug("Starting validation loop")
             clean_data = {}
+
             for sensor in sensors:
                 key = f"last_battery_change_{sensor.unique_id}"
-                raw_value = user_input.get(key, "")
-                if raw_value:
-                    try:
-                        # validazione ISO
-                        parsed_date = datetime.datetime.strptime(
-                            raw_value, "%Y-%m-%d"
-                        ).date()
-                        if parsed_date > datetime.date.today():
-                            errors[key] = "future_date"
-                        else:
-                            clean_data[key] = parsed_date.isoformat()
-                    except Exception as e:  # noqa: BLE001
-                        _LOGGER.warning(
-                            "Invalid date '%s' for sensor %s, ignoring. Exeption was: %s",
-                            raw_value,
-                            key,
-                            e,
-                        )
-                        errors[key] = "data_invalid"
-                        #clean_data[key] = ""
-                else:
+                label = f"{sensor.zone_name} (zona {sensor.index + 1})"
+                clear_key = (
+                    f"Nessuna data — {sensor.zone_name} (zona {sensor.index + 1})"
+                )
+
+                clear_selected = user_input.get(clear_key, False)
+
+                _LOGGER.debug(
+                    "Checking sensor %s (%s), checkbox=%r",
+                    sensor.unique_id,
+                    sensor.zone_name,
+                    clear_selected,
+                )
+
+                # La checkbox ha priorità assoluta sulla data.
+                if clear_selected:
                     clean_data[key] = ""
+                    continue
+
+                raw_value = user_input.get(label)
+
+                # Campo vuoto: nessuna data salvata.
+                if not raw_value:
+                    clean_data[key] = ""
+                    continue
+
+                try:
+                    parsed_date = datetime.date.fromisoformat(str(raw_value))
+
+                    if parsed_date > dt_util.now().date():
+                        errors[label] = "future_date"
+                    else:
+                        clean_data[key] = parsed_date.isoformat()
+
+                except (ValueError, TypeError):
+                    errors[label] = "data_invalid"
 
             if not errors:
-                _LOGGER.debug("Cleaned user_input to save: %s", clean_data)
+                _LOGGER.debug("Saving battery replacement dates: %s", clean_data)
                 return self.async_create_entry(title="", data=clean_data)
 
-        # Costruire schema con stringa editabile
-        schema_dict = {}
-        schema_dict[
+        schema_dict = {
             vol.Optional(
                 "Istruzioni",
-                default="Puoi inserire una data in formato YYYY-MM-DD (es: 2025-09-14) o vuoto per non attivare il calcolo stimato della batteria residua)",
+                default=(
+                    "Seleziona la data dell'ultima sostituzione della batteria. "
+                    "Se non la conosci, seleziona l'opzione per disabilitare "
+                    "la stima della batteria."
+                ),
+            ): selector.TextSelector(
+                selector.TextSelectorConfig(read_only=True, multiline=True)
             )
-        ] = selector.TextSelector(selector.EntitySelectorConfig(read_only=True))
+        }
 
         for sensor in sensors:
             key = f"last_battery_change_{sensor.unique_id}"
-            if user_input is not None:
-                default = user_input.get(key, "")
+            label = f"{sensor.zone_name} (zona {sensor.index + 1})"
+            clear_key = f"Nessuna data — {sensor.zone_name} (zona {sensor.index + 1})"
+
+            saved_date = self.config_entry.options.get(key, "")
+
+            # Conserva il valore inviato se il form viene ripresentato
+            # dopo un errore; altrimenti usa la data salvata.
+            if user_input is not None and label in user_input:
+                default_date = user_input[label] or saved_date or "1970-01-01"
             else:
-                default = self.config_entry.options.get(key, "")
-            schema_dict[vol.Optional(key, default=default)] = str
+                default_date = saved_date or "1970-01-01"
 
-        schema = vol.Schema(schema_dict)
-        _LOGGER.debug("Final schema_dict: %s", schema_dict)
+            if user_input is not None and clear_key in user_input:
+                default_clear = user_input[clear_key]
+            else:
+                default_clear = not bool(saved_date)
 
-        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+            # Campo data. 1970-01-01 è un workaround temporaneo
+            # per evitare il valore iniziale nullo non accettato.
+            schema_dict[vol.Optional(label, default=default_date)] = (
+                selector.DateSelector(selector.DateSelectorConfig())
+            )
+
+            # Checkbox per indicare che non è disponibile una data.
+            schema_dict[vol.Optional(clear_key, default=default_clear)] = (
+                selector.BooleanSelector(selector.BooleanSelectorConfig())
+            )
+
+        _LOGGER.debug("Options form schema keys: %s", list(schema_dict.keys()))
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors,
+        )
 
 
 class CannotConnect(HomeAssistantError):

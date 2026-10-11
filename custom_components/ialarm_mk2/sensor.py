@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date
 import logging
+from datetime import date
 
 from homeassistant.components.sensor import Any, SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -87,7 +87,7 @@ class IAlarmmkSensorBattery(CoordinatorEntity, SensorEntity):
         self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
         sensor = self._sensor_map.get(self._attr_index)
 
-        if (sensor.state & self.coordinator.hub.ialarmmk.ZONE_LOW_BATTERY):
+        if sensor.state & self.coordinator.hub.ialarmmk.ZONE_LOW_BATTERY:
             return 5
 
         if not sensor or not sensor.last_battery_change_date:
@@ -101,7 +101,11 @@ class IAlarmmkSensorBattery(CoordinatorEntity, SensorEntity):
             try:
                 last_change = date.fromisoformat(sensor.last_battery_change_date)
             except ValueError:
-                _LOGGER.warning("Invalid date '%s' for sensor %s, ignoring", sensor.last_battery_change_date, sensor.zone_name)
+                _LOGGER.warning(
+                    "Invalid date '%s' for sensor %s, ignoring",
+                    sensor.last_battery_change_date,
+                    sensor.zone_name,
+                )
                 return None
         else:
             last_change = sensor.last_battery_change_date

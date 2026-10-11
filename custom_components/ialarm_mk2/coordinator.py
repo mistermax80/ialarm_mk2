@@ -1,13 +1,13 @@
 """Coordinator."""
 
 import asyncio
-from asyncio.timeouts import timeout
 import copy
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta
 import logging
 import random
 import time
+from asyncio.timeouts import timeout
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
@@ -31,6 +31,8 @@ class SensorData:
     state: int
     last_fetch_time: datetime
     last_battery_change_date: date
+
+
 @dataclass
 class AlarmData:
     """Struttura dati dell'allarme."""
@@ -74,6 +76,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         sensors_data: list[SensorData] = []
         # Inizializzazione completa dell'oggetto Data
         self.data = CoordinatorData(alarm_data=alarm_data, sensors_data=sensors_data)
+
+        self._transition_timeout = 15
+        self._transition_started = None
+        self._transition_expired = False
 
         self.num_read_ok: int = 0
         self.num_read_ko: int = 0
@@ -126,7 +132,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                         int(zones[index].get("Type", 0)),
                         0,
                         None,
-                        self.config_entry.options.get(f'last_battery_change_{id_sensor}', None)
+                        self.config_entry.options.get(
+                            f"last_battery_change_{id_sensor}", None
+                        ),
                     )
                     sensors_data.append(sensor)
             _LOGGER.debug("Sensors sensors_data: %s", sensors_data)
@@ -244,12 +252,42 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                 self.hub.ialarmmk.get_last_keeplive_ts()
             )
             status: int = self.hub.ialarmmk.get_status()
+            current_state = self.data.alarm_data.state
+            now = time.monotonic()
+
+            transition_states = (
+                self.hub.ialarmmk.ALARM_ARMING,
+                self.hub.ialarmmk.ALARM_DISARMING,
+            )
+
+            if current_state not in transition_states:
+                self._transition_started = None
+                self._transition_expired = False
+
+            elif not self._transition_expired:
+                if self._transition_started is None:
+                    self._transition_started = now
+
+                if now - self._transition_started < self._transition_timeout:
+                    status = current_state
+                else:
+                    _LOGGER.warning(
+                        "Transition timeout expired after %s seconds. "
+                        "Releasing temporary state %s; accepting library state %s(%s).",
+                        self._transition_timeout,
+                        self.hub.ialarmmk.status_dict.get(current_state),
+                        self.hub.ialarmmk.status_dict.get(status),
+                        status,
+                    )
+                    self._transition_expired = True
+                    self._transition_started = None
+
+            return_data.alarm_data.state = status
             _LOGGER.debug(
                 "Updating internal state: %s(%s)",
                 self.hub.ialarmmk.status_dict.get(status),
                 status,
             )
-            return_data.alarm_data.state = status
 
             tz = ZoneInfo(self.hass.config.time_zone)
             attempts = 0
