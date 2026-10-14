@@ -6,6 +6,7 @@ import datetime
 import logging
 from typing import Any
 
+import probatio
 import voluptuous as vol
 from homeassistant import data_entry_flow
 from homeassistant.config_entries import (
@@ -22,6 +23,7 @@ from homeassistant.const import (
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import section
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 from homeassistant.util import dt as dt_util
@@ -181,7 +183,6 @@ class MyOptionsFlowHandler(OptionsFlow):
 
         coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
         sensors = coordinator.data.sensors_data
-        _LOGGER.debug("Options flow sensors: %s", len(sensors))
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -189,13 +190,14 @@ class MyOptionsFlowHandler(OptionsFlow):
             clean_data = {}
 
             for sensor in sensors:
+                section_key = f"{sensor.zone_name} (zone {sensor.index + 1})"
+                label = "battery_replacement_date"
+                clear_key = "disable_battery_estimate"
                 key = f"last_battery_change_{sensor.unique_id}"
-                label = f"{sensor.zone_name} (zona {sensor.index + 1})"
-                clear_key = (
-                    f"Nessuna data — {sensor.zone_name} (zona {sensor.index + 1})"
-                )
 
-                clear_selected = user_input.get(clear_key, False)
+                # I valori della zona sono annidati nella sezione.
+                zone_input = user_input.get(section_key, {})
+                clear_selected = zone_input.get(clear_key, False)
 
                 _LOGGER.debug(
                     "Checking sensor %s (%s), checkbox=%r",
@@ -209,7 +211,7 @@ class MyOptionsFlowHandler(OptionsFlow):
                     clean_data[key] = ""
                     continue
 
-                raw_value = user_input.get(label)
+                raw_value = zone_input.get(label)
 
                 # Campo vuoto: nessuna data salvata.
                 if not raw_value:
@@ -228,57 +230,72 @@ class MyOptionsFlowHandler(OptionsFlow):
                     errors[label] = "data_invalid"
 
             if not errors:
-                _LOGGER.debug("Saving battery replacement dates: %s", clean_data)
+                _LOGGER.debug(
+                    "Saving battery replacement dates: %s",
+                    clean_data,
+                )
                 return self.async_create_entry(title="", data=clean_data)
 
-        schema_dict = {
-            vol.Optional(
-                "Istruzioni",
-                default=(
-                    "Seleziona la data dell'ultima sostituzione della batteria. "
-                    "Se non la conosci, seleziona l'opzione per disabilitare "
-                    "la stima della batteria."
-                ),
-            ): selector.TextSelector(
-                selector.TextSelectorConfig(read_only=True, multiline=True)
-            )
-        }
+        schema_dict = {}
 
         for sensor in sensors:
+            section_key = f"{sensor.zone_name} (zone {sensor.index + 1})"
+            label = "battery_replacement_date"
+            clear_key = "disable_battery_estimate"
             key = f"last_battery_change_{sensor.unique_id}"
-            label = f"{sensor.zone_name} (zona {sensor.index + 1})"
-            clear_key = f"Nessuna data — {sensor.zone_name} (zona {sensor.index + 1})"
 
             saved_date = self.config_entry.options.get(key, "")
 
-            # Conserva il valore inviato se il form viene ripresentato
-            # dopo un errore; altrimenti usa la data salvata.
-            if user_input is not None and label in user_input:
-                default_date = user_input[label] or saved_date or "1970-01-01"
-            else:
-                default_date = saved_date or "1970-01-01"
+            # Recupera i valori inviati se il form viene ripresentato
+            # dopo un errore di validazione.
+            zone_input = (
+                user_input.get(section_key, {}) if user_input is not None else {}
+            )
 
-            if user_input is not None and clear_key in user_input:
-                default_clear = user_input[clear_key]
+            if label in zone_input:
+                current_date = zone_input[label]
+            else:
+                current_date = saved_date
+
+            if clear_key in zone_input:
+                default_clear = zone_input[clear_key]
             else:
                 default_clear = not bool(saved_date)
 
-            # Campo data. 1970-01-01 è un workaround temporaneo
-            # per evitare il valore iniziale nullo non accettato.
-            schema_dict[vol.Optional(label, default=default_date)] = (
-                selector.DateSelector(selector.DateSelectorConfig())
+            # Il selettore resta facoltativo.
+            # Se esiste una data, la proponiamo senza imporre un default.
+            date_marker = probatio.Optional(label)
+
+            if current_date:
+                date_marker = probatio.Optional(
+                    label,
+                    description={
+                        "suggested_value": str(current_date),
+                    },
+                )
+
+            section_schema = {
+                date_marker: selector.DateSelector(selector.DateSelectorConfig()),
+                probatio.Optional(
+                    clear_key,
+                    default=default_clear,
+                ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            }
+
+            # Raggruppa data e checkbox nella sezione del sensore.
+            schema_dict[probatio.Required(section_key)] = section(
+                probatio.Schema(section_schema),
+                {"collapsed": True},
             )
 
-            # Checkbox per indicare che non è disponibile una data.
-            schema_dict[vol.Optional(clear_key, default=default_clear)] = (
-                selector.BooleanSelector(selector.BooleanSelectorConfig())
-            )
-
-        _LOGGER.debug("Options form schema keys: %s", list(schema_dict.keys()))
+        _LOGGER.debug(
+            "Options form schema keys: %s",
+            list(schema_dict.keys()),
+        )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(schema_dict),
+            data_schema=probatio.Schema(schema_dict),
             errors=errors,
         )
 

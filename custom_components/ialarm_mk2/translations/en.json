@@ -28,5 +28,14 @@
     "abort": {
       "already_configured": "Device is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Batterie dei sensori",
+        "description": "Indica la data dell'ultima sostituzione per ciascun sensore. Se non la conosci, seleziona \"Batteria non presente\" per disabilitare la stima della batteria."
+      }
+    }
   }
+
 }
