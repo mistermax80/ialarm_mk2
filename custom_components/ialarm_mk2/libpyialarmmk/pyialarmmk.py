@@ -15,7 +15,6 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
-from collections import OrderedDict as OD
 import contextlib
 import logging
 import random
@@ -23,13 +22,15 @@ import re
 import socket
 import time
 import uuid
+from collections import OrderedDict as OD
 
-from lxml import etree
 import xmltodict
+from lxml import etree
 
 from ..const import IALARMMK_P2P_PREFIX_TASK_NAME
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class ConnectionError(Exception):
     pass
@@ -65,7 +66,10 @@ class iAlarmMkClient:
         self.token = None
 
     def __del__(self):
-        self.logout()
+        try:
+            self.logout()
+        except Exception:
+            _LOGGER.exception("Error during client destruction")
 
     def _reinit_socket(self):
         """Chiude e reinizializza il socket."""
@@ -140,48 +144,58 @@ class iAlarmMkClient:
                     raise ClientError("Login error")
                 self._print(f"Login ok, token used is {self.token}")
 
-            except socket.timeout as e:
+            except TimeoutError as e:
                 self._print(f"Connection timeout: {e}", e)
                 self.close_socket()
-                raise ConnectionError("Connection error: timeout")
+                raise ConnectionError("Connection error: timeout") from e
 
             except ConnectionRefusedError as e:
                 self._print(f"Connection refused by the server: {e}", e)
                 self.close_socket()
-                raise ConnectionError("Connection error: connection refused")
+                raise ConnectionError("Connection error: connection refused") from e
 
-            except socket.error as e:
+            except OSError as e:
                 self._print(f"Network error: {e}", e)
                 self.close_socket()
-                raise ConnectionError("Connection error: network error")
+                raise ConnectionError("Connection error: network error") from e
+
+            except (ConnectionError, ClientError):
+                self.close_socket()
+                raise
 
             except Exception as e:
                 self._print(f"Unexpected error during login: {e}", e)
                 self.close_socket()
-                raise ClientError("Unexpected error during login")
+                raise ClientError("Unexpected error during login") from e
 
     def close_socket(self):
-        """Funzione ausiliaria per chiudere il socket in modo sicuro."""
-        if self.sock:
-            try:
-                self.sock.shutdown(socket.SHUT_RDWR)
-                self.sock.close()
-            except Exception as e:
-                self._print(f"Error closing socket: {e}")
-            finally:
-                self.sock = None
-                self._print(f"Closed socket with token: {self.token}")
-                self.token = None
+        """Chiude il socket in modo sicuro."""
+        if self.sock is None:
+            return
+
+        sock = self.sock
+        self.sock = None
+
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError as e:
+            self._print(f"Error during socket shutdown: {e}")
+
+        try:
+            sock.close()
+        except OSError as e:
+            self._print(f"Error closing socket: {e}")
+        finally:
+            self._print(f"Closed socket with token: {self.token}")
+            self.token = None
 
     def logout(self):
         self._print("Logout method called.")
         if self.sock is None:
             return
-        self.sock.shutdown(socket.SHUT_RDWR)
-        self.sock.close()
-        self.sock = None
+
         self._print(f"Logout socket with token: {self.token}")
-        self.token = None
+        self.close_socket()
 
     def GetAlarmStatus(self):
         cmd = OD()
@@ -609,7 +623,7 @@ class iAlarmMkClient:
         return self._(xpath, cmd)
 
     def SetRemote(self, pos, code):
-        cmd = OD()  #
+        cmd = OD()
         cmd["Pos"] = S32(pos, 1)
         cmd["Code"] = STR(code)
         cmd["Err"] = None
@@ -762,7 +776,10 @@ class iAlarmMkClient:
         return l
 
     def _send(self, root):
-        xml: str = etree.tostring(self._convert_dict_to_xml(root), pretty_print=False)
+        xml: str = etree.tostring(
+            self._convert_dict_to_xml(root),
+            pretty_print=False,
+        )
         self.seq += 1
         mesg = b"@ieM%04d%04d0000%s%04d" % (
             len(xml),
@@ -770,55 +787,37 @@ class iAlarmMkClient:
             self._xor(xml),
             self.seq,
         )
-        self.sock.send(mesg)
-
-    def safe_shutdown(self):
-        """Chiude il socket solo se è connesso."""
-        if self.sock is None:
-            return
 
         try:
-            fd = self.sock.fileno()
-            if fd == -1:
-                self._print("Socket già chiuso.")
-                return
-
-            err = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-            if err != 0:
-                self._print(f"Socket con errore {err}, skip shutdown.")
-                return
-
-            self.sock.shutdown(socket.SHUT_RDWR)
-            self._print("Socket shutdown eseguito.")
+            self.sock.sendall(mesg)
+        except TimeoutError as e:
+            self.safe_shutdown()
+            raise ConnectionError("Connection timed out while sending data.") from e
         except OSError as e:
-            self._print(f"Errore durante shutdown: {e}")
-        finally:
-            self.sock.close()
-            self.sock = None
+            self.safe_shutdown()
+            raise ConnectionError(f"Connection error while sending data: {e}") from e
+
+    def safe_shutdown(self):
+        """Chiude il socket in modo sicuro."""
+        self._print("Safe shutdown richiesto.")
+        self.close_socket()
 
     def _receive(self):
         try:
             data = self.sock.recv(1024)
-            if data == b"":
-                self.safe_shutdown()
-                raise ConnectionError(
-                    "Connection error: Connection closed by remote host."
-                )
-            if not data:
-                self.safe_shutdown()
-                raise ConnectionError(
-                    "Connection error: No data received (unexpected)."
-                )
-            self._print(f"Data received is length: {len(data)}")
-        except socket.timeout:
+        except TimeoutError as e:
             self.safe_shutdown()
-            raise ConnectionError("Connection timed out.")
+            raise ConnectionError("Connection timed out.") from e
         except OSError as e:
             self.safe_shutdown()
-            raise ConnectionError("Connection error.")
-        except Exception as e:
+            raise ConnectionError(f"Connection error while receiving data: {e}") from e
+
+        if data == b"":
             self.safe_shutdown()
-            raise ConnectionError("Connection error: generic error.")
+            raise ConnectionError("Connection error: Connection closed by remote host.")
+
+        self._print(f"Data received is length: {len(data)}")
+
         return xmltodict.parse(
             self._xor(data[16:-4]).decode(),
             xml_attribs=False,
@@ -1020,7 +1019,9 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                         break
                     await asyncio.sleep(self.keepalive)
                     if self.transport is None or self.transport.is_closing():
-                        self._print(f"[{task_name}] Transport closed, stop keepalive task.")
+                        self._print(
+                            f"[{task_name}] Transport closed, stop keepalive task."
+                        )
                         break
                     await self._keepalive()
                     self._print(f"[{task_name}] Keepalive sent.")
@@ -1038,10 +1039,15 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
 
         # Creiamo il nuovo task
         if not self._task_cancelled:
-            task_name = f"{IALARMMK_P2P_PREFIX_TASK_NAME}KEEP_{random.randint(100, 999)}"
-            self._keepalive_task = self.loop.create_task(keepalive_loop(task_name), name=task_name)
-            self._print(f"[{task_name}] New keepalive task started (interval: {self.keepalive}s).")
-
+            task_name = (
+                f"{IALARMMK_P2P_PREFIX_TASK_NAME}KEEP_{random.randint(100, 999)}"
+            )
+            self._keepalive_task = self.loop.create_task(
+                keepalive_loop(task_name), name=task_name
+            )
+            self._print(
+                f"[{task_name}] New keepalive task started (interval: {self.keepalive}s)."
+            )
 
     def handle_connect(self):
         """Avvia il keepalive asincrono usando il loop di asyncio."""
@@ -1077,9 +1083,13 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
             resp = None
 
             if head == b"%maI":
-                self._print("iAlarmMkPushClient.handle_read: keepalive message received.")
+                self._print(
+                    "iAlarmMkPushClient.handle_read: keepalive message received."
+                )
                 self.last_keeplive_ts = time.time()
-                self._print(f"iAlarmMkPushClient.handle_read: set keeplive timestamp: {self.last_keeplive_ts}")
+                self._print(
+                    f"iAlarmMkPushClient.handle_read: set keeplive timestamp: {self.last_keeplive_ts}"
+                )
                 self.start_keepalive()
             elif head == b"@ieM":
                 self._print("iAlarmMkPushClient.handle_read: pairing message received.")

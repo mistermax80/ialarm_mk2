@@ -130,7 +130,7 @@ search for **iAlarm MK**, and follow the setup.
 [license-shield]: https://img.shields.io/github/license/mistermax80/ialarm_mk2?style=for-the-badge
 [license]: https://github.com/mistermax80/ialarm_mk2/blob/main/LICENSE.md
 
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2025?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026?style=for-the-badge
 [maintenance]: https://github.com/mistermax80/ialarm_mk2
 
 [projectstage-shield]: https://img.shields.io/badge/project%20stage-stable-brightgreen?style=for-the-badge

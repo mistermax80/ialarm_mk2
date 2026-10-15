@@ -295,7 +295,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
             while attempts < max_attempts:
                 try:
-                    if self.num_read_ok > 1000:
+                    if self.num_read_ok >= 1000:
                         _LOGGER.debug("Reset connection token.")
                         self.hub.ialarmmk.ialarmmkClient.logout()
                         self.num_read_ok = 0
@@ -319,7 +319,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     break  # Se il blocco riesce, esci dal ciclo
                 except Exception as e:
                     self.num_read_ko += 1
-                    _LOGGER.exception("Error during fetch data.")
+                    _LOGGER.exception(
+                        "Error during fetch data (attempt %d/%d)",
+                        attempts + 1,
+                        max_attempts,
+                    )
                     self.hub.ialarmmk.ialarmmkClient.logout()
                     _LOGGER.info("After error, logout ok.")
                     attempts += 1
