@@ -768,7 +768,6 @@ class iAlarmMkClient:
         total = self._select(resp, "%s/Total" % xpath)
         ln = self._select(resp, "%s/Ln" % xpath)
         for i in list(range(ln)):
-            event = self._select(resp, "%s/L%d" % (xpath, i))
             l.append(self._select(resp, "%s/L%d" % (xpath, i)))
         offset += ln
         if total > offset:
@@ -816,7 +815,10 @@ class iAlarmMkClient:
             self.safe_shutdown()
             raise ConnectionError("Connection error: Connection closed by remote host.")
 
-        self._print(f"Data received is length: {len(data)}")
+        self._print(
+            f"Data received: length={len(data)}, "
+            f"header={data[:16]!r}, trailer={data[-4:]!r}"
+        )
 
         return xmltodict.parse(
             self._xor(data[16:-4]).decode(),

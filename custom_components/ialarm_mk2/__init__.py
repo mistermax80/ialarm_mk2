@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from asyncio.timeouts import timeout
 import logging
+from asyncio.timeouts import timeout
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -23,7 +23,12 @@ from .coordinator import iAlarmMk2Coordinator
 from .hub import IAlarmMkHub
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.ALARM_CONTROL_PANEL,
+    Platform.BINARY_SENSOR,
+    Platform.SENSOR,
+]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iAlarm-MK Integration 2 from a config entry."""
