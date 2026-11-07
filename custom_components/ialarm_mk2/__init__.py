@@ -54,9 +54,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         async with timeout(10):
-            await hub.validate()
-    except (TimeoutError, ConnectionError) as ex:
-        raise ConfigEntryNotReady from ex
+            is_valid = await hub.validate()
+
+        if not is_valid:
+            raise ConfigEntryNotReady("iAlarm-MK validation failed. Will retry setup.")
+
+    except TimeoutError as ex:
+        raise ConfigEntryNotReady("iAlarm-MK validation timed out.") from ex
+
+    except ConnectionError as ex:
+        raise ConfigEntryNotReady("Unable to connect to iAlarm-MK.") from ex
 
     coordinator: iAlarmMk2Coordinator = iAlarmMk2Coordinator(hass, hub)
 

@@ -32,7 +32,7 @@ class IAlarmMkHub:
         self.scan_interval: int = scan_interval
         self.mac: str = None
         self.name: str = None
-        #self.state: int = None
+        # self.state: int = None
         self.changed_by: str = None
         self.lastRealUpdateStatus = None
         self.ialarmmk = ipyialarmmk.iAlarmMkInterface(
@@ -40,19 +40,20 @@ class IAlarmMkHub:
         )
 
     async def validate(self) -> bool:
-        """Verifica la connessione e recupera le informazioni sul dispositivo."""
+        """Verifica la connessione e recupera le informazioni del dispositivo."""
         _LOGGER.info("Validating connection, getting MAC address...")
 
         try:
-            # Verifica se l'indirizzo MAC è già stato recuperato
             if self.mac is None:
-                # Recupera l'indirizzo MAC e imposta le informazioni sul dispositivo
-                data_in: dict[str, str] = self.ialarmmk.get_mac()
-                self.mac = format_mac(data_in.get("Mac"))
-                self.name = data_in.get("Name")
+                data_in = await self.hass.async_add_executor_job(self.ialarmmk.get_mac)
+
+                self.mac = format_mac(data_in["Mac"])
+                self.name = data_in.get("Name", "iAlarm-MK")
+
                 _LOGGER.info("MAC address: %s", self.mac)
+
         except Exception:
-            _LOGGER.exception("Error during validation IAlarm device.")
+            _LOGGER.exception("Error during iAlarm device validation.")
             return False
 
-        return True  # Connessione riuscita
+        return True

@@ -1,7 +1,7 @@
 {
   "domain": "ialarm_mk2",
   "name": "iAlarm-MK Integration 2",
-  "version": "2.3.0-alpha.4",
+  "version": "2.3.0-alpha.5",
   "codeowners": ["@mistermax80"],
   "loggers": ["ialarm_mk2"],
   "config_flow": true,
@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/mistermax80/ialarm_mk2/issues",
   "iot_class": "cloud_polling",
   "integration_type": "hub",
-  "requirements": ["lxml"]
+  "requirements": ["lxml","xmltodict"]
 }

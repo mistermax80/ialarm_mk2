@@ -746,13 +746,19 @@ class iAlarmMkClient:
         return self._(xpath, cmd)
 
     def _print(self, data, exception: Exception | None = None):
-        if _LOGGER is not None:
-            if exception is not None:
-                _LOGGER.exception(str(data), exception)
-            else:
-                _LOGGER.debug(str(data))
+        if exception is not None:
+            _LOGGER.error(
+                "%s: %s",
+                data,
+                exception,
+                exc_info=(
+                    type(exception),
+                    exception,
+                    exception.__traceback__,
+                ),
+            )
         else:
-            print(str(data))
+            _LOGGER.debug("%s", data)
 
     def _(self, xpath, cmd, is_list=False, offset=0, l=None):
         if offset > 0:
@@ -988,7 +994,14 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
 
     def connection_lost(self, exc):
         """Connessione push all'allarme persa."""
-        self._print(f"iAlarmMkPushClient - connection_lost exception: {exc}")
+        if exc is None:
+            _LOGGER.info("Push connection closed.")
+        else:
+            _LOGGER.warning(
+                "Push connection lost: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
         if hasattr(self, "_keepalive_task") and self._keepalive_task is not None:
             self._keepalive_task.cancel()
             self._keepalive_task = None
@@ -1215,13 +1228,19 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self._print("iAlarmMkPushClient._keepalive, sent messagge:" + str(mesg))
 
     def _print(self, data, exception: Exception | None = None):
-        if _LOGGER is not None:
-            if exception is not None:
-                _LOGGER.exception(str(data), exception)
-            else:
-                _LOGGER.debug(str(data))
+        if exception is not None:
+            _LOGGER.error(
+                "%s: %s",
+                data,
+                exception,
+                exc_info=(
+                    type(exception),
+                    exception,
+                    exception.__traceback__,
+                ),
+            )
         else:
-            print(str(data))
+            _LOGGER.debug("%s", data)
 
 
 def BOL(en):

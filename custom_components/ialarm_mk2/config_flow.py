@@ -66,7 +66,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     )
 
     if not await hub.validate():
-        raise InvalidAuth
+        raise CannotConnect
 
     # If you cannot connect:
     # throw CannotConnect

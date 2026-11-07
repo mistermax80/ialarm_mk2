@@ -15,9 +15,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import asyncio
-from datetime import datetime
 import json
 import logging
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
@@ -268,12 +268,12 @@ class iAlarmMkInterface:
         else:
             _LOGGER.debug("Callback is None.")
 
-    def cancel_alarm(self) -> None:
+    def cancel_alarm(self, user_id: str | None) -> None:
         """Command for cancel alarm."""
         try:
             self.ialarmmkClient.login()
             self.ialarmmkClient.SetAlarmStatus(self.CANCEL)
-            self._set_status(self.DISARMED)
+            self._set_status(self.DISARMED, user_id)
             self.ialarmmkClient.logout()
         except Exception as e:
             _LOGGER.error("Error canceling alarm: %s", e)

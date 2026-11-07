@@ -228,7 +228,7 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         _LOGGER.info("Fetching data...")
 
         if not self.last_update_success:
-            _LOGGER.warning("Last update was not successful, waiting 5 seconds.")
+            _LOGGER.warning("Last update was not successful, waiting 10 seconds.")
             await asyncio.sleep(10)
 
         try:

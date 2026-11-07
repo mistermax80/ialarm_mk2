@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
@@ -77,22 +77,25 @@ class IAlarmmkSensorBattery(CoordinatorEntity, SensorEntity):
         return self._attr_index
 
     @property
-    def zone_name(self) -> int:
+    def zone_name(self) -> str:
         """Return sensor index."""
         return self._attr_zone_name
 
     @property
-    def native_value(self) -> int:
+    def native_value(self) -> int | None:
         """Return battery charge percentage based on last change date."""
         # Mappa index → sensore
         self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
         sensor = self._sensor_map.get(self._attr_index)
 
+        if sensor is None:
+            return None
+
         if sensor.state & self.coordinator.hub.ialarmmk.ZONE_LOW_BATTERY:
             return 5
 
-        if not sensor or not sensor.last_battery_change_date:
-            return None  # default se mancante
+        if not sensor.last_battery_change_date:
+            return None
 
         # Durata media della batteria: 2 anni
         BATTERY_LIFETIME_DAYS = 365 * 2
@@ -112,20 +115,24 @@ class IAlarmmkSensorBattery(CoordinatorEntity, SensorEntity):
             last_change = sensor.last_battery_change_date
 
         # Giorni trascorsi dall'ultimo cambio
-        days_elapsed = (date.today() - last_change).days
+        days_elapsed = (datetime.now(tz=timezone.utc).date() - last_change).days
 
         # Percentuale residua
         return max(0, min(100, int((1 - days_elapsed / BATTERY_LIFETIME_DAYS) * 100)))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Ritorna gli attributi personalizzati dinamici."""
-        self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
-        sensor = self._sensor_map.get(self._attr_index)
+        """Return battery sensor attributes."""
+        sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
+        sensor = sensor_map.get(self._attr_index)
+
         return {
             "zone_number": self._attr_index,
             "serial_number": self._attr_unique_id,
-            "last_battery_change_date": sensor.last_battery_change_date,
+            "last_battery_change_date": (
+                sensor.last_battery_change_date if sensor is not None else None
+            ),
+            "battery_estimated": True,
         }
 
     @property

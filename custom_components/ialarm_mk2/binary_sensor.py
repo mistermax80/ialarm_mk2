@@ -83,14 +83,30 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_bypass: bool = None
         self._attr_last_check = None
 
+    def _get_sensor(self):
+        return next(
+            (
+                s
+                for s in self.coordinator.data.sensors_data
+                if s.index == self._attr_index
+            ),
+            None,
+        )
+
     @property
     def is_on(self) -> bool | None:
         """Return whether the sensor is on."""
         log_message = (
             f"Getting is_on for sensor: {self._attr_zone_name}({self._attr_index}) --> "
         )
-        self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
-        sensor = self._sensor_map.get(self._attr_index)
+        sensor = self._get_sensor()
+        if sensor is None:
+            _LOGGER.warning(
+                "Sensor %s (index %s) not found in coordinator data",
+                self._attr_zone_name,
+                self._attr_index,
+            )
+            return None
         _value_is_on = None
 
         log_message += f"{sensor.state}: "
@@ -153,15 +169,19 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
         return self._attr_index
 
     @property
-    def zone_name(self) -> int:
+    def zone_name(self) -> str:
         """Return sensor index."""
         return self._attr_zone_name
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Ritorna gli attributi personalizzati dinamici."""
-        self._sensor_map = {s.index: s for s in self.coordinator.data.sensors_data}
-        sensor = self._sensor_map.get(self._attr_index)
+        sensor = self._get_sensor()
+        if sensor is None:
+            return {
+                "zone_number": self._attr_index,
+                "serial_number": self._attr_unique_id,
+            }
 
         zone_type_labels = {
             0: "disabled",
