@@ -17,3 +17,38 @@ template:
           {% else %}
             mdi:shield
           {% endif %}
+
+ios:
+  actions:
+    - name: attiva_allarme
+      label:
+        text: "Attiva Allarme"
+      icon:
+        icon: home_export_outline
+        color: "#ff0000"
+      show_in_carplay: true
+      show_in_watch: true
+    - name: disattiva_allarme
+      label:
+        text: "Disattiva Allarme"
+      icon:
+        icon: home_import_outline
+        color: "#00ff00"
+      show_in_carplay: true
+      show_in_watch: true
+    - name: attiva_incasa_allarme
+      label:
+        text: "Attiva Allarme in casa"
+      icon:
+        icon: home_account
+        color: "#ffa500"
+      show_in_carplay: true
+      show_in_watch: true
+    - name: attiva_parziale_allarme
+      label:
+        text: "Attiva Allarme parziale"
+      icon:
+        icon: home_account
+        color: "#ffa500"
+      show_in_carplay: true
+      show_in_watch: true
