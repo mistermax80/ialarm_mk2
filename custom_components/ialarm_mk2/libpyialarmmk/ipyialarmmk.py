@@ -195,6 +195,7 @@ class iAlarmMkInterface:
                         task_name,
                         retry_delay,
                     )
+                    await asyncio.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, 30)
 
         except asyncio.CancelledError:
@@ -294,6 +295,37 @@ class iAlarmMkInterface:
             self.callback(event_data)
         else:
             _LOGGER.debug("Callback is None.")
+
+    def reboot(self):
+        """Send reboot command to iAlarm-MK panel."""
+        _LOGGER.info("Sending reboot command to iAlarm-MK.")
+
+        # Dedicated client to avoid interfering with polling.
+        client = iAlarmMkClient(
+            self.host,
+            self.port,
+            self.uid,
+            self.pwd,
+        )
+
+        try:
+            client.login()
+            response = client.Reset(True)
+
+            _LOGGER.info(
+                "iAlarm-MK reboot command response: %s",
+                response,
+            )
+
+            if response is None:
+                _LOGGER.warning(
+                    "Reboot response missing; command may have been executed."
+                )
+            elif isinstance(response, dict) and response.get("Err"):
+                raise RuntimeError(f"Reboot rejected: {response['Err']}")
+
+        finally:
+            client.logout()
 
     def cancel_alarm(self, user_id: str | None) -> None:
         """Command for cancel alarm."""

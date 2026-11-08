@@ -998,9 +998,22 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
         self.handle_connect()
 
     def data_received(self, data: bytes) -> None:
-        """Ricezione dei dati push da allarme."""
+        """Receive push data and handle protocol errors safely."""
         self._print(f"iAlarmMkPushClient.data_received: {len(data)} (len data)")
-        self.handle_read(data)
+
+        try:
+            self.handle_read(data)
+
+        except PushClientError as err:
+            _LOGGER.warning(
+                "Push subscription rejected: %s",
+                err,
+            )
+            self._close()
+
+        except Exception:
+            _LOGGER.exception("Unexpected error while processing push data.")
+            self._close()
 
     def connection_lost(self, exc):
         """Connessione push all'allarme persa."""
