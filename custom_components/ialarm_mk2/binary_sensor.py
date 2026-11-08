@@ -243,8 +243,8 @@ class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
             return False
         # differenza in secondi tra ora corrente e ultimo keepalive
         diff = time.time() - last_ts
-        # se l'ultimo keepalive è entro 5 minuti → True, altrimenti False
-        return diff <= 5 * 60
+        # se l'ultimo keepalive è entro 2 minuti → True, altrimenti False
+        return diff <= 2 * 60
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

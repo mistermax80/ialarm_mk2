@@ -427,9 +427,9 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         if self._keepalive_timer is not None:
             self._keepalive_timer.cancel()
 
-        # Schedule connectivity check after 5 minutes.
+        # Schedule connectivity check after 2 minutes.
         self._keepalive_timer = asyncio.get_running_loop().call_later(
-            301,
+            121,
             self._expire_keepalive,
             timestamp,
         )

@@ -1161,6 +1161,14 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                             "iAlarmMkPushClient.handle_read: Device successfully paired."
                         )
                         self.last_keeplive_ts = time.time()
+
+                        if self.keepalive_callback is not None:
+                            try:
+                                self.keepalive_callback(self.last_keeplive_ts)
+                            except Exception:
+                                _LOGGER.exception(
+                                    "Failed to notify successful push pairing."
+                                )
                 else:
                     self._print(
                         "iAlarmMkPushClient.handle_read: No pairing information found."
