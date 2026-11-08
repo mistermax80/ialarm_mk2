@@ -65,16 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except ConnectionError as ex:
         raise ConfigEntryNotReady("Unable to connect to iAlarm-MK.") from ex
 
-    coordinator: iAlarmMk2Coordinator = iAlarmMk2Coordinator(hass, hub)
+    coordinator: iAlarmMk2Coordinator = iAlarmMk2Coordinator(hass, hub, entry)
 
-    async def _async_on_hass_stop(_: Event) -> None:
-        """Close connection when hass stops."""
-        # await iAlarmMk2Coordinator.async_shutdown()
-        await coordinator.async_shutdown()
-
-    entry.async_on_unload(
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_on_hass_stop)
-    )
     entry.async_on_unload(entry.add_update_listener(async_update_entry))
 
     await coordinator.async_config_entry_first_refresh()
@@ -92,10 +84,29 @@ async def async_update_entry(hass: HomeAssistant, entry: ConfigEntry):
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> bool:
     """Unload a config entry."""
-    _LOGGER.info("Unload %s Integration from a config entry...", DOMAIN)
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    _LOGGER.info("Unloading %s integration...", DOMAIN)
+
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry,
+        PLATFORMS,
+    )
+
+    if unload_ok:
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        _LOGGER.info("%s platforms unloaded.", DOMAIN)
+    else:
+        _LOGGER.error(
+            "Unable to unload all %s platforms.",
+            DOMAIN,
+        )
+
+    return unload_ok
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

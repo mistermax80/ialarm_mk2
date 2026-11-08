@@ -6,11 +6,14 @@ import logging
 import random
 import time
 from asyncio.timeouts import timeout
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.core import callback as ha_callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, IALARMMK_P2P_PREFIX_TASK_NAME
@@ -53,19 +56,29 @@ class CoordinatorData:
 class iAlarmMk2Coordinator(DataUpdateCoordinator):
     """Class to manage fetching iAlarm-MK data."""
 
-    def __init__(self, hass: HomeAssistant, hub: IAlarmMkHub) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        hub: IAlarmMkHub,
+        entry: ConfigEntry,
+    ) -> None:
         """Initialize global a data updater."""
         _LOGGER.info("Initialize global a data updater...")
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            # update_interval=SCAN_INTERVAL,
+            config_entry=entry,
             update_interval=timedelta(seconds=hub.scan_interval),
         )
         self.hub: IAlarmMkHub = hub
         self.hub.ialarmmk.set_callback(self.callback, self.callback_only_status)
         self._subscription_task = None
+        self._shutdown_done = False
+        self._last_keepalive_ts = 0.0
+        self._keepalive_timer = None
+
+        self.hub.ialarmmk.set_keepalive_callback(self._handle_keepalive)
 
         # self.sensors: list[IAlarmmkSensor] = []
         # self.sensors_bat: list[IAlarmmkSensorBattery] = []
@@ -88,9 +101,6 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         _LOGGER.info("Setup data updater...")
 
         try:
-            # Registrazione listener di spegnimento
-            self.hass.bus.async_listen_once("homeassistant_stop", self.async_shutdown)
-
             # Start the subscription in the background
             tasks = get_active_tasks(IALARMMK_P2P_PREFIX_TASK_NAME + "SUBS")
             _LOGGER.debug(
@@ -120,7 +130,10 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
             self.hub.ialarmmk.ialarmmkClient.logout()
             _LOGGER.debug("Logout OK.")
 
-            alarm_data = AlarmData(0)
+            alarm_data = AlarmData(
+                state=0,
+                last_keeplive_ts=self._last_keepalive_ts,
+            )
             sensors_data: list[SensorData] = []
 
             for index, id_sensor in enumerate(idsSensors):
@@ -233,7 +246,11 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         try:
             async with timeout(30):
-                return await self.hass.async_add_executor_job(self._fetch_device_data)
+                result = await self.hass.async_add_executor_job(self._fetch_device_data)
+
+                result.alarm_data.last_keeplive_ts = self._last_keepalive_ts
+
+                return result
 
             # await self.async_update_data()
         except Exception as error:
@@ -248,9 +265,6 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
         return_data = copy.deepcopy(self.data)
 
         try:
-            return_data.alarm_data.last_keeplive_ts = (
-                self.hub.ialarmmk.get_last_keeplive_ts()
-            )
             status: int = self.hub.ialarmmk.get_status()
             current_state = self.data.alarm_data.state
             now = time.monotonic()
@@ -354,15 +368,91 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
 
         return return_data
 
-    async def async_shutdown(self, *args):
-        """Gestisci la chiusura delle risorse quando Home Assistant si spegne."""
-        _LOGGER.info(
-            "Shutting down iAlarmMk custom component, and close the connections active..."
-        )
-        if self._subscription_task:
-            self._subscription_task.cancel()
+    async def async_shutdown(self):
+        """Close resources during unload or shutdown."""
+
+        if self._shutdown_done:
+            return
+
+        self._shutdown_done = True
+        _LOGGER.info("Shutting down iAlarm MK2 coordinator...")
+
+        try:
+            self.hub.ialarmmk.set_keepalive_callback(None)
+            if self._keepalive_timer is not None:
+                self._keepalive_timer.cancel()
+                self._keepalive_timer = None
+
+            # Stop receiving push events.
+            self.hub.ialarmmk.set_callback(None, None)
+
+            # Stop keepalive and close push transport.
             self.hub.ialarmmk.cancel_subscription()
-            await self._subscription_task
-        self.hub.ialarmmk.ialarmmkClient.logout()
-        super().async_shutdown()
-        _LOGGER.info("Shutdown iAlarmMk custom component completed.")
+
+            # Cancel and await the subscription task.
+            if self._subscription_task is not None:
+                task = self._subscription_task
+                task.cancel()
+
+                with suppress(asyncio.CancelledError):
+                    await task
+
+                self._subscription_task = None
+
+            # Close command connection.
+            await self.hass.async_add_executor_job(
+                self.hub.ialarmmk.ialarmmkClient.logout
+            )
+
+        finally:
+            # Stop coordinator scheduling.
+            await super().async_shutdown()
+
+            _LOGGER.info("iAlarm MK2 coordinator shutdown completed.")
+
+    @ha_callback
+    def _handle_keepalive(self, timestamp: float) -> None:
+        """Update connectivity from received push keepalive."""
+
+        if self._shutdown_done:
+            return
+
+        self._last_keepalive_ts = timestamp
+        self.data.alarm_data.last_keeplive_ts = timestamp
+
+        # Notify entities without performing a TCP fetch.
+        self.async_update_listeners()
+
+        # Cancel previous expiration timer.
+        if self._keepalive_timer is not None:
+            self._keepalive_timer.cancel()
+
+        # Schedule connectivity check after 5 minutes.
+        self._keepalive_timer = asyncio.get_running_loop().call_later(
+            301,
+            self._expire_keepalive,
+            timestamp,
+        )
+
+        _LOGGER.debug(
+            "Push keepalive received, timestamp=%s",
+            timestamp,
+        )
+
+    @ha_callback
+    def _expire_keepalive(self, expected_timestamp: float) -> None:
+        """Notify entities when keepalive becomes stale."""
+
+        self._keepalive_timer = None
+
+        if self._shutdown_done:
+            return
+
+        # Ignore obsolete timer callbacks.
+        if self._last_keepalive_ts != expected_timestamp:
+            return
+
+        _LOGGER.warning("No push keepalive received for over 300 seconds.")
+
+        # is_on will now evaluate to False.
+        self.async_update_listeners()

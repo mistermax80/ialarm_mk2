@@ -961,10 +961,20 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
     keepalive = 60
     timeout = 10
 
-    def __init__(self, host, port, uid, handler, loop, on_con_lost):
+    def __init__(
+        self,
+        host,
+        port,
+        uid,
+        handler,
+        loop,
+        on_con_lost,
+        keepalive_callback=None,
+    ):
         """Inizializza il client push."""
         if not callable(handler):
             raise TypeError("handler is not a function")
+        self.keepalive_callback = keepalive_callback
         self.host = host
         self.port = port
         self.handler = handler
@@ -1101,11 +1111,17 @@ class iAlarmMkPushClient(asyncio.Protocol, iAlarmMkClient):
                 self._print(
                     "iAlarmMkPushClient.handle_read: keepalive message received."
                 )
+
                 self.last_keeplive_ts = time.time()
-                self._print(
-                    f"iAlarmMkPushClient.handle_read: set keeplive timestamp: {self.last_keeplive_ts}"
-                )
+
+                if self.keepalive_callback is not None:
+                    try:
+                        self.keepalive_callback(self.last_keeplive_ts)
+                    except Exception:
+                        _LOGGER.exception("Error notifying keepalive callback")
+
                 self.start_keepalive()
+
             elif head == b"@ieM":
                 self._print("iAlarmMkPushClient.handle_read: pairing message received.")
                 xpath = "/Root/Pair/Push"

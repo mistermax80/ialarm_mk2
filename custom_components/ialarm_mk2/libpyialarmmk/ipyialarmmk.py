@@ -87,6 +87,7 @@ class iAlarmMkInterface:
         self.hass: HomeAssistant = hass
 
         self.push_client: iAlarmMkPushClient | None = None
+        self.keepalive_callback = None
 
         # self.transport = None
         self._cancelled = False
@@ -98,100 +99,126 @@ class iAlarmMkInterface:
         self.callback = callback
         self.callback_only_status = callback_only_status
 
+    def set_keepalive_callback(self, callback):
+        """Register callback for received keepalive messages."""
+        self.keepalive_callback = callback
+
+        if self.push_client is not None:
+            self.push_client.keepalive_callback = callback
+
     async def subscribe(self, task_name: str):
-        """Gestisce la sottoscrizione con log migliorati."""
-        disconnect_time = 60 * 5  # 5 minuti
-        _LOGGER.debug(
-            "[%s] Task started (disconnect_time=%s(s).", task_name, disconnect_time
-        )
+        """Manage push subscription and reconnection."""
+
+        retry_delay = 2
+        connect_timeout = 15
+
+        _LOGGER.info("[%s] Push subscription started.", task_name)
 
         try:
-            while True:
-                # Controlla se il task è stato cancellato
-                if self._cancelled:
-                    _LOGGER.debug("[%s] Task cancelled. Exit loop.", task_name)
-                    # quà potrei fermare il keeplive
-                    self.push_client.handle_connect()
-                    break
-
+            while not self._cancelled:
                 loop = asyncio.get_running_loop()
                 on_con_lost = loop.create_future()
+                client = None
 
                 try:
-                    # Crea una nuova connessione se necessario
-                    if (
-                        self.push_client is None
-                        or self.push_client.transport is None
-                        or self.push_client.transport.is_closing()
-                    ):
-                        if (
-                            self.push_client is not None
-                            and self.push_client.transport is not None
-                        ):
-                            _LOGGER.debug("[%s] Closing old transport.", task_name)
-                            self.push_client.transport.close()
-                            self.push_client.transport = None
-
-                        self.push_client: iAlarmMkPushClient = iAlarmMkPushClient(
-                            self.host,
-                            self.port,
-                            self.uid,
-                            self.set_status,
-                            loop,
-                            on_con_lost,
-                        )
-                        (
-                            self.push_client.transport,
-                            protocol,
-                        ) = await loop.create_connection(
-                            lambda: self.push_client,
-                            self.host,
-                            self.port,
-                        )
-                        _LOGGER.info(
-                            "[%s] New connection push_client established.", task_name
-                        )
-
-                    # Mantiene viva la connessione per un certo tempo
-                    _LOGGER.debug(
-                        "[%s] Connection Active. Sleep %s(s)...",
-                        task_name,
-                        disconnect_time,
+                    client = iAlarmMkPushClient(
+                        self.host,
+                        self.port,
+                        self.uid,
+                        self.set_status,
+                        loop,
+                        on_con_lost,
+                        keepalive_callback=self.keepalive_callback,
                     )
-                    await asyncio.sleep(disconnect_time)
 
-                except (ConnectionError, TimeoutError) as e:
-                    _LOGGER.error("[%s] Connection error: %s", task_name, e)
+                    self.push_client = client
 
-                except Exception as e:
-                    _LOGGER.error("[%s] Unexepected error: %s", task_name, e)
+                    # Limit connection establishment time.
+                    transport, _ = await asyncio.wait_for(
+                        loop.create_connection(
+                            lambda: client,
+                            self.host,
+                            self.port,
+                        ),
+                        timeout=connect_timeout,
+                    )
+
+                    client.transport = transport
+
+                    _LOGGER.info(
+                        "[%s] Push connection established.",
+                        task_name,
+                    )
+
+                    # Wait for disconnection instead of sleeping.
+                    await on_con_lost
+
+                    _LOGGER.warning(
+                        "[%s] Push connection lost.",
+                        task_name,
+                    )
+
+                except asyncio.CancelledError:
+                    _LOGGER.debug(
+                        "[%s] Subscription cancelled.",
+                        task_name,
+                    )
+                    raise
+
+                except (OSError, ConnectionError, TimeoutError) as err:
+                    _LOGGER.warning(
+                        "[%s] Push connection error: %s",
+                        task_name,
+                        err,
+                    )
+
+                except Exception:
+                    _LOGGER.exception(
+                        "[%s] Unexpected push connection error.",
+                        task_name,
+                    )
 
                 finally:
-                    # Cleanup se la connessione è persa
-                    if on_con_lost.done():
-                        _LOGGER.debug("[%s] Connection lost. Cleanup...", task_name)
-                        if (
-                            self.push_client
-                            and self.push_client.transport
-                            and not self.push_client.transport.is_closing()
-                        ):
-                            self.push_client.transport.close()
+                    # Close only this connection's transport.
+                    if client is not None:
+                        client.handle_stop_connect()
+
+                    if self.push_client is client:
                         self.push_client = None
 
-                    # Breve pausa prima di tentare la riconnessione
-                    await asyncio.sleep(1)
+                    if not on_con_lost.done():
+                        on_con_lost.cancel()
+
+                if not self._cancelled:
+                    _LOGGER.info(
+                        "[%s] Reconnecting push in %s seconds.",
+                        task_name,
+                        retry_delay,
+                    )
+                    retry_delay = min(retry_delay * 2, 30)
 
         except asyncio.CancelledError:
-            _LOGGER.debug("[%s] Task cancelled.", task_name)
+            _LOGGER.debug(
+                "[%s] Subscription task stopped.",
+                task_name,
+            )
             raise
 
         finally:
-            _LOGGER.debug("[%s] Task terminanted.", task_name)
+            _LOGGER.info(
+                "[%s] Push subscription terminated.",
+                task_name,
+            )
 
     def cancel_subscription(self):
-        """Metodo per cancellare la subscription e fermare il keep tasks."""
-        self._cancelled = True  # Imposta il flag di cancellazione
-        self.push_client.handle_stop_connect()
+        """Stop push subscription and keepalive."""
+        self._cancelled = True
+
+        if self.push_client is not None:
+            self.push_client.handle_stop_connect()
+            self.push_client = None
+
+        _LOGGER.debug("Push subscription cancellation requested.")
 
     def get_last_keeplive_ts(self):
         """Metodo per prendere l'ultimo timestamp ricevuto per il messaggio di keeplive."""
