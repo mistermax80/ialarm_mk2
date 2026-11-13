@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
@@ -12,6 +13,7 @@ from homeassistant.components.alarm_control_panel import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -22,6 +24,7 @@ from homeassistant.helpers.update_coordinator import (
 from . import libpyialarmmk as ipyialarmmk
 from .const import DOMAIN
 from .coordinator import iAlarmMk2Coordinator
+from .libpyialarmmk.ipyialarmmk import AlarmCommandError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,19 +86,26 @@ class iAlarmMkPanel(CoordinatorEntity[iAlarmMk2Coordinator], AlarmControlPanelEn
 
     def alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
-        self.coordinator.hub.ialarmmk.disarm(self._retrive_user_id())
+        self._execute_alarm_command(self.coordinator.hub.ialarmmk.disarm)
 
     def alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command."""
-        self.coordinator.hub.ialarmmk.arm_stay(self._retrive_user_id())
+        self._execute_alarm_command(self.coordinator.hub.ialarmmk.arm_stay)
 
     def alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command."""
-        self.coordinator.hub.ialarmmk.arm_away(self._retrive_user_id())
+        self._execute_alarm_command(self.coordinator.hub.ialarmmk.arm_away)
 
     def alarm_arm_custom_bypass(self, code: str | None = None) -> None:
         """Send arm away command."""
-        self.coordinator.hub.ialarmmk.arm_partial(self._retrive_user_id())
+        self._execute_alarm_command(self.coordinator.hub.ialarmmk.arm_partial)
+
+    def _execute_alarm_command(self, command: Callable[[str | None], None]) -> None:
+        """Expose sanitized command errors to Home Assistant."""
+        try:
+            command(self._retrive_user_id())
+        except AlarmCommandError as err:
+            raise HomeAssistantError(str(err)) from None
 
     @property
     def device_info(self):

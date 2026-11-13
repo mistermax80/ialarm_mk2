@@ -11,6 +11,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -229,14 +230,54 @@ class IAlarmmkSensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def device_info(self):
         """Device Sensor Info."""
-        return {
+        info = {
             "identifiers": {(DOMAIN, self._attr_unique_id)},
             "name": self._attr_zone_name,
             "serial_number": self._attr_unique_id,
             "manufacturer": "antifurto 365",
             "model": "Sensore",
-            "via_device": (DOMAIN, self.coordinator.hub.username),
         }
+        panel_identifier = (DOMAIN, self.coordinator.hub.username)
+        zone_identifier = (DOMAIN, self._attr_unique_id)
+        if panel_identifier == zone_identifier:
+            return info
+
+        config_entry_id = self.coordinator.config_entry.entry_id
+        get_device_id = getattr(dr, "async_get_device_id_by_identifier", None)
+
+        if get_device_id is not None:
+            try:
+                panel_id = get_device_id(
+                    self.hass, panel_identifier, config_entry_id=config_entry_id
+                )
+            except ValueError:
+                # The panel may not have been registered yet during platform setup.
+                return info
+
+            try:
+                zone_id = get_device_id(
+                    self.hass, zone_identifier, config_entry_id=config_entry_id
+                )
+            except ValueError:
+                zone_id = None
+        else:
+            # Older registries lack the convenience helper; keep the lookup scoped.
+            devices = dr.async_entries_for_config_entry(
+                dr.async_get(self.hass), config_entry_id
+            )
+            panel_id = next(
+                (device.id for device in devices if panel_identifier in device.identifiers),
+                None,
+            )
+            zone_id = next(
+                (device.id for device in devices if zone_identifier in device.identifiers),
+                None,
+            )
+
+        if panel_id is not None and panel_id != zone_id:
+            info["via_device_id"] = panel_id
+
+        return info
 
 
 class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):

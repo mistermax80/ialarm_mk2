@@ -27,6 +27,14 @@ from .pyialarmmk import iAlarmMkClient, iAlarmMkPushClient
 _LOGGER = logging.getLogger(__name__)
 
 
+class AlarmCommandError(Exception):
+    """An alarm command was rejected or its outcome could not be confirmed."""
+
+
+class AlarmCommandUpdateError(AlarmCommandError):
+    """The panel accepted a command but the local notification failed."""
+
+
 class iAlarmMkInterface:
     """Interface with pyialarmmk library."""
 
@@ -431,45 +439,68 @@ class iAlarmMkInterface:
 
     def arm_stay(self, user_id: str | None) -> None:
         """Command for arm alarm."""
-        try:
-            self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(self.ARMED_STAY)
-            self._set_status(self.ARMED_STAY, user_id)
-            self.ialarmmkClient.logout()
-        except Exception as e:
-            _LOGGER.error("Error arming alarm in stay mode: %s", e)
+        self._execute_alarm_command(self.ARMED_STAY, self.ARMED_STAY, user_id)
 
     def disarm(self, user_id: str | None) -> None:
         """Command for disarm alarm."""
-        try:
-            self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(self.DISARMED)
-            self._set_status(self.ALARM_DISARMING, user_id)
-            self.ialarmmkClient.logout()
-        except Exception as e:
-            _LOGGER.error("Error disarming alarm: %s", e)
+        self._execute_alarm_command(self.DISARMED, self.ALARM_DISARMING, user_id)
 
     def arm_away(self, user_id: str | None) -> None:
         """Command for arm alarm."""
-        try:
-            self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(self.ARMED_AWAY)
-            self._set_status(self.ALARM_ARMING, user_id)
-            self.ialarmmkClient.logout()
-        except Exception as e:
-            _LOGGER.error("Error arming alarm in away mode: %s", e)
+        self._execute_alarm_command(self.ARMED_AWAY, self.ALARM_ARMING, user_id)
 
     def arm_partial(self, user_id: str | None) -> None:
         """Command for arm partial alarm."""
-        try:
-            self.ialarmmkClient.login()
-            self.ialarmmkClient.SetAlarmStatus(self.ARMED_PARTIAL)
-            self._set_status(self.ALARM_ARMING, user_id)
-            self.ialarmmkClient.logout()
-        except Exception as e:
-            _LOGGER.error("Error arming alarm in partial mode: %s", e)
+        self._execute_alarm_command(self.ARMED_PARTIAL, self.ALARM_ARMING, user_id)
 
-    def _set_status(self, status, user_id: str | None) -> None:
+    def _execute_alarm_command(
+        self, command: int, local_status: int, user_id: str | None
+    ) -> None:
+        """Validate the acknowledgement without retrying or changing state policy."""
+        try:
+            try:
+                self.ialarmmkClient.login()
+            except Exception:
+                raise AlarmCommandError(
+                    "Unable to establish the alarm session; command not sent."
+                ) from None
+
+            try:
+                response = self.ialarmmkClient.SetAlarmStatus(command)
+            except Exception:
+                raise AlarmCommandError(
+                    "Alarm command outcome is not confirmed: no valid response was "
+                    "received. The command may have been executed; check the panel "
+                    "before repeating it."
+                ) from None
+
+            if not isinstance(response, dict) or type(response.get("Err")) is not int:
+                raise AlarmCommandError(
+                    "Alarm command outcome is not confirmed: the response is invalid "
+                    "or incomplete. Check the panel before repeating the command."
+                )
+            if response["Err"] != 0:
+                raise AlarmCommandError(
+                    f"The panel rejected the alarm command (error {response['Err']})."
+                )
+
+            try:
+                self._set_status(local_status, user_id, raise_on_error=True)
+            except Exception:
+                raise AlarmCommandUpdateError(
+                    "The panel accepted the alarm command, but the local state "
+                    "notification failed. Check the panel before repeating the command."
+                ) from None
+        finally:
+            try:
+                self.ialarmmkClient.logout()
+            except Exception:
+                # Cleanup failure must not mask the command outcome or leak secrets.
+                _LOGGER.warning("Unable to close the alarm command session.")
+
+    def _set_status(
+        self, status, user_id: str | None, *, raise_on_error: bool = False
+    ) -> None:
         if self.hass is not None:
             try:
                 asyncio.run_coroutine_threadsafe(
@@ -478,6 +509,8 @@ class iAlarmMkInterface:
                 # Puoi anche loggare il risultato se necessario
                 _LOGGER.debug("Status updated successfully: %s", status)
             except Exception as e:
+                if raise_on_error:
+                    raise
                 # Gestisci l'eccezione e logga l'errore
                 _LOGGER.error("Error updating status: %s", e)
 
