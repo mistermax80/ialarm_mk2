@@ -16,6 +16,7 @@
 
 import asyncio
 import contextlib
+import errno
 import logging
 import random
 import re
@@ -176,18 +177,40 @@ class iAlarmMkClient:
         sock = self.sock
         self.sock = None
 
+        already_closed = False
         try:
-            sock.shutdown(socket.SHUT_RDWR)
+            already_closed = sock.fileno() == -1
+            if not already_closed:
+                sock.shutdown(socket.SHUT_RDWR)
         except OSError as e:
-            _LOGGER.error("Error during socket shutdown (%s).", type(e).__name__)
-
-        try:
-            sock.close()
-        except OSError as e:
-            _LOGGER.error("Error closing socket (%s).", type(e).__name__)
+            level = logging.ERROR
+            if e.errno == errno.ENOTCONN:
+                level = logging.DEBUG
+            elif e.errno == errno.EBADF:
+                level = logging.WARNING
+            _LOGGER.log(
+                level,
+                "Error during socket shutdown (%s), errno=%s.",
+                type(e).__name__,
+                e.errno,
+            )
         finally:
-            self._print("Socket closed.")
-            self.token = None
+            try:
+                sock.close()
+            except OSError as e:
+                level = logging.ERROR
+                if e.errno == errno.EBADF:
+                    level = logging.DEBUG if already_closed else logging.WARNING
+                _LOGGER.log(
+                    level,
+                    "Error closing socket (%s), errno=%s.",
+                    type(e).__name__,
+                    e.errno,
+                )
+            else:
+                self._print("Socket closed.")
+            finally:
+                self.token = None
 
     def logout(self):
         self._print("Logout method called.")
