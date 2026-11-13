@@ -30,6 +30,9 @@ __pycache__/
 # Altri file/dir da ignorare
 # =========================
 
+# macOS metadata
+.DS_Store
+
 # Cartelle temporanee o log
 *.log
 *.tmp

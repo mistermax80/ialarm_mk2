@@ -24,6 +24,21 @@ from .coordinator import iAlarmMk2Coordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+DIAGNOSTIC_BINARY_SENSORS = {
+    "network": {
+        "Dhcp": "DHCP",
+    },
+    "system": {
+        "ArmVoice": "Arm Voice",
+        "ArmReport": "Arm Report",
+        "ForceArm": "Force Arm",
+        "DoorCheck": "Door Check",
+        "BreakCheck": "Break Check",
+        "AlarmLimit": "Alarm Limit",
+    },
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -51,6 +66,22 @@ async def async_setup_entry(
 
         _LOGGER.debug("Set up connectivty sensor.")
         async_add_entities([IAlarmmkConnectivity(coordinator)], update_before_add=False)
+
+    diagnostic_entities = [
+        IAlarmMkDiagnosticBinarySensor(
+            coordinator,
+            section,
+            key,
+            name,
+        )
+        for section, fields in DIAGNOSTIC_BINARY_SENSORS.items()
+        for key, name in fields.items()
+    ]
+
+    async_add_entities(
+        diagnostic_entities,
+        update_before_add=False,
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -261,6 +292,52 @@ class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
     @property
     def device_info(self):
         """Device Sensor Info."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.hub.username)},
+        }
+
+
+class IAlarmMkDiagnosticBinarySensor(
+    CoordinatorEntity,
+    BinarySensorEntity,
+):
+    """Represent a read-only panel configuration flag."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: iAlarmMk2Coordinator,
+        section: str,
+        key: str,
+        name: str,
+    ) -> None:
+        """Initialize the diagnostic binary sensor."""
+        super().__init__(coordinator)
+
+        self._section = section
+        self._key = key
+
+        self._attr_name = name
+        self._attr_unique_id = f"{coordinator.hub.username}_diagnostic_{section}_{key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the configuration flag."""
+        diagnostics = self.coordinator.data.diagnostics
+        section_data = diagnostics.get(self._section) or {}
+
+        value = section_data.get(self._key)
+
+        if value is None:
+            return None
+
+        return bool(value)
+
+    @property
+    def device_info(self):
+        """Associate the entity with the alarm panel."""
         return {
             "identifiers": {(DOMAIN, self.coordinator.hub.username)},
         }

@@ -93,7 +93,7 @@ class iAlarmMkClient:
                 return False
             self._print("Socket già connesso e senza errori.")
         except OSError as e:
-            self._print(f"Socket non connesso: {e}. Reinizializzo...")
+            _LOGGER.debug("Socket not connected (%s). Reinitializing...", type(e).__name__)
             self._reinit_socket()
             return False
         return True
@@ -138,24 +138,24 @@ class iAlarmMkClient:
                 # Controllo degli errori nella risposta del server
                 if self.client["Err"]:
                     self._print(
-                        f"Error during login to the server: {self.client['Err']}, token used is {self.token}"
+                        f"Error during login to the server: {self.client['Err']}"
                     )
                     self.close_socket()
                     raise ClientError("Login error")
-                self._print(f"Login ok, token used is {self.token}")
+                self._print("Login successful.")
 
             except TimeoutError as e:
-                self._print(f"Connection timeout: {e}", e)
+                _LOGGER.error("Connection timeout during login (%s).", type(e).__name__)
                 self.close_socket()
                 raise ConnectionError("Connection error: timeout") from e
 
             except ConnectionRefusedError as e:
-                self._print(f"Connection refused by the server: {e}", e)
+                _LOGGER.error("Connection refused during login (%s).", type(e).__name__)
                 self.close_socket()
                 raise ConnectionError("Connection error: connection refused") from e
 
             except OSError as e:
-                self._print(f"Network error: {e}", e)
+                _LOGGER.error("Network error during login (%s).", type(e).__name__)
                 self.close_socket()
                 raise ConnectionError("Connection error: network error") from e
 
@@ -164,7 +164,7 @@ class iAlarmMkClient:
                 raise
 
             except Exception as e:
-                self._print(f"Unexpected error during login: {e}", e)
+                _LOGGER.error("Unexpected error during login (%s).", type(e).__name__)
                 self.close_socket()
                 raise ClientError("Unexpected error during login") from e
 
@@ -179,14 +179,14 @@ class iAlarmMkClient:
         try:
             sock.shutdown(socket.SHUT_RDWR)
         except OSError as e:
-            self._print(f"Error during socket shutdown: {e}")
+            _LOGGER.error("Error during socket shutdown (%s).", type(e).__name__)
 
         try:
             sock.close()
         except OSError as e:
-            self._print(f"Error closing socket: {e}")
+            _LOGGER.error("Error closing socket (%s).", type(e).__name__)
         finally:
-            self._print(f"Closed socket with token: {self.token}")
+            self._print("Socket closed.")
             self.token = None
 
     def logout(self):
@@ -194,7 +194,7 @@ class iAlarmMkClient:
         if self.sock is None:
             return
 
-        self._print(f"Logout socket with token: {self.token}")
+        self._print("Logging out socket.")
         self.close_socket()
 
     def GetAlarmStatus(self):
@@ -265,6 +265,7 @@ class iAlarmMkClient:
         cmd = OD()
         cmd["Mac"] = None
         cmd["Name"] = None
+        cmd["Dhcp"] = None
         cmd["Ip"] = None
         cmd["Gate"] = None
         cmd["Subnet"] = None

@@ -7,7 +7,7 @@ import random
 import time
 from asyncio.timeouts import timeout
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -51,6 +51,7 @@ class CoordinatorData:
 
     alarm_data: AlarmData
     sensors_data: list[SensorData]
+    diagnostics: dict = field(default_factory=dict)
 
 
 class iAlarmMk2Coordinator(DataUpdateCoordinator):
@@ -152,6 +153,21 @@ class iAlarmMk2Coordinator(DataUpdateCoordinator):
                     sensors_data.append(sensor)
             _LOGGER.debug("Sensors sensors_data: %s", sensors_data)
             self.data = CoordinatorData(alarm_data, sensors_data)
+
+            # Read static panel diagnostics once during setup.
+            try:
+                diagnostics = await self.hass.async_add_executor_job(
+                    self.hub.ialarmmk.get_diagnostics
+                )
+
+                if isinstance(diagnostics, dict):
+                    self.data.diagnostics = diagnostics
+                    _LOGGER.info("Panel diagnostics successfully loaded.")
+                else:
+                    _LOGGER.warning("Panel diagnostics returned an invalid response.")
+
+            except Exception:
+                _LOGGER.exception("Unable to load panel diagnostics.")
 
         except Exception:
             _LOGGER.exception("Error in setup entities.")

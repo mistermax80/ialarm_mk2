@@ -296,21 +296,113 @@ class iAlarmMkInterface:
         else:
             _LOGGER.debug("Callback is None.")
 
+    def get_diagnostics(self) -> dict:
+        """Read selected panel diagnostics without changing settings."""
+        results = {}
+
+        commands = {
+            "network": (
+                self.ialarmmkClient.GetNet,
+                ("Mac", "Name", "Dhcp", "Ip", "Gate", "Subnet", "Dns1", "Dns2", "Err"),
+            ),
+            "mobile": (
+                self.ialarmmkClient.GetGprs,
+                ("Apn", "Err"),
+            ),
+            "system": (
+                self.ialarmmkClient.GetSys,
+                (
+                    "InDelay",
+                    "OutDelay",
+                    "AlarmTime",
+                    "WlLoss",
+                    "AcLoss",
+                    "ComLoss",
+                    "ArmVoice",
+                    "ArmReport",
+                    "ForceArm",
+                    "DoorCheck",
+                    "BreakCheck",
+                    "AlarmLimit",
+                    "Err",
+                ),
+            ),
+        }
+
+        try:
+            self.ialarmmkClient.login()
+
+            for name, (command, allowed_fields) in commands.items():
+                try:
+                    response = command()
+
+                    if not isinstance(response, dict):
+                        _LOGGER.warning(
+                            "Invalid %s diagnostics response: %s",
+                            name,
+                            type(response).__name__,
+                        )
+                        results[name] = None
+                        continue
+
+                    # Only include explicitly allowed fields.
+                    results[name] = {
+                        key: response[key] for key in allowed_fields if key in response
+                    }
+
+                except Exception as err:
+                    _LOGGER.warning(
+                        "Failed to read %s diagnostics: %s",
+                        name,
+                        type(err).__name__,
+                    )
+                    results[name] = None
+
+        finally:
+            self.ialarmmkClient.logout()
+
+        return results
+
+    def set_zone_bypass(self, zone_index: int, enabled: bool) -> None:
+        """Set the bypass state for a specific zone."""
+        try:
+            self.ialarmmkClient.login()
+
+            _LOGGER.info(
+                "Setting zone %s bypass to %s.",
+                zone_index,
+                enabled,
+            )
+
+            response = self.ialarmmkClient.SetByWay(
+                zone_index,
+                enabled,
+            )
+
+            _LOGGER.debug(
+                "SetByWay response for zone %s: %s",
+                zone_index,
+                response,
+            )
+
+        except Exception as err:
+            _LOGGER.error(
+                "Failed to set bypass for zone %s: %s",
+                zone_index,
+                err,
+            )
+            raise
+
+        finally:
+            self.ialarmmkClient.logout()
+
     def reboot(self):
         """Send reboot command to iAlarm-MK panel."""
         _LOGGER.info("Sending reboot command to iAlarm-MK.")
 
-        # Dedicated client to avoid interfering with polling.
-        client = iAlarmMkClient(
-            self.host,
-            self.port,
-            self.uid,
-            self.pwd,
-        )
-
         try:
-            client.login()
-            response = client.Reset(True)
+            self.ialarmmkClient.login()
+            response = self.ialarmmkClient.Reset(True)
 
             _LOGGER.info(
                 "iAlarm-MK reboot command response: %s",
@@ -325,7 +417,7 @@ class iAlarmMkInterface:
                 raise RuntimeError(f"Reboot rejected: {response['Err']}")
 
         finally:
-            client.logout()
+            self.ialarmmkClient.logout()
 
     def cancel_alarm(self, user_id: str | None) -> None:
         """Command for cancel alarm."""

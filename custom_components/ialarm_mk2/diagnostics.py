@@ -20,7 +20,7 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
 
-    _LOGGER.debug("entry: %s", entry.as_dict())
+    _LOGGER.debug("Preparing config entry diagnostics.")
 
     return {
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),

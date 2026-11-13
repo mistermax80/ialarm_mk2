@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -18,6 +19,28 @@ from homeassistant.helpers.update_coordinator import (
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Read-only diagnostic sensors.
+DIAGNOSTIC_SENSORS = {
+    "network": {
+        "Ip": "Configured IP",
+        "Gate": "Gateway",
+        "Dns1": "Primary DNS",
+        "Dns2": "Secondary DNS",
+    },
+    "mobile": {
+        "Apn": "Mobile APN",
+    },
+    "system": {
+        "InDelay": "Entry Delay",
+        "OutDelay": "Exit Delay",
+        "AlarmTime": "Siren Duration",
+        "WlLoss": "Wireless Loss",
+        "AcLoss": "AC Loss",
+        "ComLoss": "Communication Loss",
+    },
+}
 
 
 async def async_setup_entry(
@@ -43,6 +66,22 @@ async def async_setup_entry(
             )
             list_sensors.append(iAlarmSensor)
         async_add_entities(list_sensors, update_before_add=False)
+
+    diagnostic_entities = [
+        IAlarmMkDiagnosticSensor(
+            coordinator,
+            section,
+            key,
+            name,
+        )
+        for section, fields in DIAGNOSTIC_SENSORS.items()
+        for key, name in fields.items()
+    ]
+
+    async_add_entities(
+        diagnostic_entities,
+        update_before_add=False,
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -140,4 +179,43 @@ class IAlarmmkSensorBattery(CoordinatorEntity, SensorEntity):
         """Device Sensor Info."""
         return {
             "identifiers": {(DOMAIN, self._attr_unique_id)},
+        }
+
+
+class IAlarmMkDiagnosticSensor(CoordinatorEntity, SensorEntity):
+    """Represent a read-only panel configuration value."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator,
+        section: str,
+        key: str,
+        name: str,
+    ) -> None:
+        """Initialize the diagnostic sensor."""
+        super().__init__(coordinator)
+
+        self._section = section
+        self._key = key
+
+        self._attr_name = name
+        self._attr_unique_id = f"{coordinator.hub.username}_diagnostic_{section}_{key}"
+
+    @property
+    def native_value(self):
+        """Return the configuration value."""
+        diagnostics = self.coordinator.data.diagnostics
+
+        section_data = diagnostics.get(self._section) or {}
+
+        return section_data.get(self._key)
+
+    @property
+    def device_info(self):
+        """Associate the entity with the alarm panel."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.hub.username)},
         }
