@@ -1,4 +1,6 @@
-# Home Assistant custom integration for iAlarm MK
+# iAlarm MK2 for Home Assistant
+
+[English](README.md) | [Italiano](README.it.md)
 
 [![HACS][hacs-custom-shield]][hacs]
 [![Stable Release][stable-shield]][stable]
@@ -10,98 +12,93 @@
 [![Last Commit][lastcommit-shield]][lastcommit]
 [![License][license-shield]][license]
 [![Maintenance][maintenance-shield]][maintenance]
-[![Project Stage][projectstage-shield]][projectstage]
 
-An advanced custom integration for Home Assistant, designed for the iAlarm MK alarm system.
 
-The goal of this integration is to retrieve as much information as possible from the central server. For example:
-- Alarm status
-- Sensor status, including sensor state, battery level, bypass status, and connection loss information
-- Reception of asynchronous events from the central server
+Custom Home Assistant integration for Meian / iAlarm MK alarm panels, using an internal modified copy of `pyialarmmk`.
 
-All of this information is made available in Home Assistant, so it can be used in automations, for instance.
+The documented version is **[2.3.0-alpha.8](https://github.com/mistermax80/ialarm_mk2/releases/tag/2.3.0-alpha.8)**, published as a pre-release. The HACS metadata declares Home Assistant **2026.9.0** as the minimum version.
 
-Currently, it is possible to:
-- Retrieve the alarm status
-- Send commands to the alarm: arm, night arm, custom by-pass arm, disarm, cancel active alarm
-- View the status of sensors: open/closed for doors and windows (and others)
-- Check the battery status of sensors: for all sensors
-- Check the bypass status: for all sensors
-- Check the connection status: for all sensors
-- Listen event: `ialarm_mk2_event`
+## Features
 
-In the future, it will be possible to:
-- Configure sensors
-- Retrieve logs
-- Set bypass options
-- And more...
+| Area | Available functionality |
+| --- | --- |
+| Alarm panel | Arm away, arm home, arm custom bypass/partial and disarm; display alarm and transition states. |
+| Zones | Binary sensors for zone states, with low-battery, connection-loss, bypass and last-check attributes. |
+| Zone bypass | One configuration switch per discovered zone; changes require a successful coordinator update and a disarmed alarm. The integration refreshes and verifies the requested state. |
+| Batteries | Estimated battery percentage based on the last replacement date, configurable for each sensor. |
+| Diagnostics | Read-only network, mobile APN and system configuration values. |
+| Push | Alarm events on `ialarm_mk2_event` and a push connectivity binary sensor. |
+| Maintenance | Optional reboot button, disabled by default; reboot requires the alarm to be disarmed. |
 
-Currently, the integration uses the included `pyialarm` library, but it is planned to migrate and maintain it externally.
+### Battery estimates
 
----
+The percentage is estimated linearly over two years from the replacement date. It is not a measured charge level. Without a saved date, the value is unknown unless the panel reports a low battery; that report sets the displayed value to 5%. Disabling the estimate does not suppress the low-battery report.
 
-## 🔧 Installation
+### Diagnostics
 
-### 📦 Via HACS (Recommended)
+Diagnostic entities expose configured IP, gateway, DNS servers, DHCP, mobile APN, entry/exit delays, siren duration, loss settings and system flags. These are **configuration values**, not live AC, wireless or communication fault indicators.
 
-This integration supports **[HACS](https://hacs.xyz/)**, but is **not available in the default store**.  
-You need to add it manually as a **custom repository**:
+They are read once during integration setup and remain cached until the integration is reloaded. Settings cannot be edited through these entities.
 
-1. In Home Assistant, open **HACS → Integrations**
-2. Click the **three-dot menu (⋮)** in the top right
-3. Select **"Custom repositories"**
-4. Enter the URL:
+### State updates and events
 
-   ```
-   https://github.com/mistermax80/ialarm_mk2
-   ```
+Zone states are polled at the configured interval (60 seconds by default). Alarm status is initially read from the panel and then maintained from push events and local command updates; zone polling does not reread `GetAlarmStatus`.
 
-5. Set category to **"Integration"**, then click **Add**
-6. You will now find **iAlarm MK** in the list of integrations
-7. Install it and restart Home Assistant
+The connectivity entity indicates whether a push pairing/keepalive was received within approximately two minutes. It does not independently verify the command connection.
 
-### 📁 Manual Installation (Alternative)
+Listen for `ialarm_mk2_event` in Home Assistant to use push events in automations. Event data includes `Cid`, `Status`, `Zone`, `ZoneName`, `Content` and `LastRealUpdateStatus`. Available information depends on the received event.
 
-1. Clone or download this repository:
+## Installation
 
-   ```bash
-   git clone https://github.com/mistermax80/ialarm_mk2
-   ```
+### HACS
 
-2. Copy the `ialarm_mk2` folder to:
+Add this repository as a custom **Integration** repository in HACS:
 
-   ```
-   <your_config_directory>/custom_components/ialarm_mk2/
-   ```
+```text
+https://github.com/mistermax80/ialarm_mk2
+```
 
-3. Restart Home Assistant
+Install the integration and restart Home Assistant. To install `2.3.0-alpha.8`, enable pre-release versions when choosing the version to download in HACS.
 
----
+### Manual installation
 
-## 🧩 Configuration
+1. Download the desired release from [GitHub releases](https://github.com/mistermax80/ialarm_mk2/releases).
+2. Copy the release's `custom_components/ialarm_mk2` directory into `<config>/custom_components/ialarm_mk2`, preserving its contents.
+3. Restart Home Assistant.
 
-After installation, go to:
+## Configuration
 
-**Settings → Devices & Services → Add Integration**,  
-search for **iAlarm MK**, and follow the setup.
+In **Settings → Devices & services → Add integration**, search for **iAlarm-MK Integration 2**. Enter the host (IP address or hostname), port, panel ID/username, password and zone polling interval. The default host is the server address configured by the integration.
 
----
+Use **Reconfigure** to change connection settings or the polling interval. In the integration's options, expand a sensor section to set its last battery replacement date. Turn off `disable_battery_estimate` when enabling an estimate; leaving it on clears the saved date. Future dates are rejected.
 
-## ℹ️ HACS Availability
+Entity names are available in English and Italian. Existing user-defined entity names are preserved. Battery-option sections currently use dynamic sensor names and raw field identifiers (`battery_replacement_date`, `disable_battery_estimate`).
 
-> ⚠️ Even though the badge says "HACS Custom Repository", this integration is **not in the HACS default store**.  
-> It must be added manually via the **Custom Repositories** option.
+## Current limits and planned work
 
----
+- `GetLog` and `GetEvents` exist in the internal library but are not exposed as history retrieval features in Home Assistant. Push events are already supported.
+- System settings are read-only; `SetSys` is not exposed.
+- Zone configuration and a separate cancel-active-alarm action are not exposed.
+- SOS/emergency activation is not exposed.
 
-## 🙏 Special thanks to:
+## Logging and offline tests
 
-- https://github.com/wildstray/meian-client  
-- https://github.com/RyuzakiKK/pyialarm  
-- https://github.com/bigmoby/pymeianlike  
-- https://github.com/maxill1/ialarm-mqtt  
+The integration no longer dumps the full configuration entry into diagnostic logs or includes authentication tokens in login/logout/socket-close messages. Those error logs retain the operation and exception type while omitting raw exception text. This does not remove existing log files or constitute redaction of every possible log emitted by other code.
 
----
+Nine automated tests cover push failure/backoff and sensitive logging. From the repository root, with Home Assistant, `lxml` and `xmltodict` available in the Python environment, run:
+
+```sh
+python -B -m unittest discover -s custom_components/ialarm_mk2/tests -v
+```
+
+The tests mock communication and do not connect to a real alarm panel.
+
+## Thanks
+
+- [meian-client](https://github.com/wildstray/meian-client)
+- [pyialarm](https://github.com/RyuzakiKK/pyialarm)
+- [pymeianlike](https://github.com/bigmoby/pymeianlike)
+- [ialarm-mqtt](https://github.com/maxill1/ialarm-mqtt)
 
 [hacs-custom-shield]: https://img.shields.io/badge/HACS-Custom%20Repository-blue?style=for-the-badge
 [hacs]: https://hacs.xyz/repository/github/mistermax80/ialarm_mk2
@@ -128,10 +125,7 @@ search for **iAlarm MK**, and follow the setup.
 [lastcommit]: https://github.com/mistermax80/ialarm_mk2/commits/main
 
 [license-shield]: https://img.shields.io/github/license/mistermax80/ialarm_mk2?style=for-the-badge
-[license]: https://github.com/mistermax80/ialarm_mk2/blob/main/LICENSE.md
+[license]: https://github.com/mistermax80/ialarm_mk2/blob/main/LICENSE
 
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026?style=for-the-badge
 [maintenance]: https://github.com/mistermax80/ialarm_mk2
-
-[projectstage-shield]: https://img.shields.io/badge/project%20stage-stable-brightgreen?style=for-the-badge
-[projectstage]: https://github.com/mistermax80/ialarm_mk2

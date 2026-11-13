@@ -25,17 +25,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 DIAGNOSTIC_BINARY_SENSORS = {
-    "network": {
-        "Dhcp": "DHCP",
-    },
-    "system": {
-        "ArmVoice": "Arm Voice",
-        "ArmReport": "Arm Report",
-        "ForceArm": "Force Arm",
-        "DoorCheck": "Door Check",
-        "BreakCheck": "Break Check",
-        "AlarmLimit": "Alarm Limit",
-    },
+    "network": ("Dhcp",),
+    "system": ("ArmVoice", "ArmReport", "ForceArm", "DoorCheck", "BreakCheck", "AlarmLimit"),
 }
 
 
@@ -72,10 +63,9 @@ async def async_setup_entry(
             coordinator,
             section,
             key,
-            name,
         )
         for section, fields in DIAGNOSTIC_BINARY_SENSORS.items()
-        for key, name in fields.items()
+        for key in fields
     ]
 
     async_add_entities(
@@ -253,6 +243,7 @@ class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
     """Representation of a iAlarm Status Sensor for connectivity."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "connectivity"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -260,7 +251,6 @@ class IAlarmmkConnectivity(CoordinatorEntity, BinarySensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = coordinator.hub.username
-        # self._attr_name = "Connectivity"
         self._attr_last_keeplive_ts = None
 
     @property
@@ -311,7 +301,6 @@ class IAlarmMkDiagnosticBinarySensor(
         coordinator: iAlarmMk2Coordinator,
         section: str,
         key: str,
-        name: str,
     ) -> None:
         """Initialize the diagnostic binary sensor."""
         super().__init__(coordinator)
@@ -319,7 +308,7 @@ class IAlarmMkDiagnosticBinarySensor(
         self._section = section
         self._key = key
 
-        self._attr_name = name
+        self._attr_translation_key = f"{section}_{key.lower()}"
         self._attr_unique_id = f"{coordinator.hub.username}_diagnostic_{section}_{key}"
 
     @property

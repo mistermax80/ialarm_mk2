@@ -36,7 +36,7 @@ class IAlarmMkRebootButton(
     """Reboot the iAlarm-MK control panel."""
 
     _attr_has_entity_name = True
-    _attr_name = "Reboot Control Panel"
+    _attr_translation_key = "reboot"
     _attr_icon = "mdi:restart"
     _attr_entity_registry_enabled_default = False
 

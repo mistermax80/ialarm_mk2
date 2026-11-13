@@ -23,23 +23,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Read-only diagnostic sensors.
 DIAGNOSTIC_SENSORS = {
-    "network": {
-        "Ip": "Configured IP",
-        "Gate": "Gateway",
-        "Dns1": "Primary DNS",
-        "Dns2": "Secondary DNS",
-    },
-    "mobile": {
-        "Apn": "Mobile APN",
-    },
-    "system": {
-        "InDelay": "Entry Delay",
-        "OutDelay": "Exit Delay",
-        "AlarmTime": "Siren Duration",
-        "WlLoss": "Wireless Loss",
-        "AcLoss": "AC Loss",
-        "ComLoss": "Communication Loss",
-    },
+    "network": ("Ip", "Gate", "Dns1", "Dns2"),
+    "mobile": ("Apn",),
+    "system": ("InDelay", "OutDelay", "AlarmTime", "WlLoss", "AcLoss", "ComLoss"),
 }
 
 
@@ -72,10 +58,9 @@ async def async_setup_entry(
             coordinator,
             section,
             key,
-            name,
         )
         for section, fields in DIAGNOSTIC_SENSORS.items()
-        for key, name in fields.items()
+        for key in fields
     ]
 
     async_add_entities(
@@ -93,7 +78,7 @@ class IAlarmmkSensorBattery(CoordinatorEntity, SensorEntity):
     """Representation of a Sensor."""
 
     _attr_has_entity_name = True
-    _attr_name = "Battery"
+    _attr_translation_key = "battery"
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_native_unit_of_measurement = "%"
 
@@ -193,7 +178,6 @@ class IAlarmMkDiagnosticSensor(CoordinatorEntity, SensorEntity):
         coordinator,
         section: str,
         key: str,
-        name: str,
     ) -> None:
         """Initialize the diagnostic sensor."""
         super().__init__(coordinator)
@@ -201,7 +185,7 @@ class IAlarmMkDiagnosticSensor(CoordinatorEntity, SensorEntity):
         self._section = section
         self._key = key
 
-        self._attr_name = name
+        self._attr_translation_key = f"{section}_{key.lower()}"
         self._attr_unique_id = f"{coordinator.hub.username}_diagnostic_{section}_{key}"
 
     @property

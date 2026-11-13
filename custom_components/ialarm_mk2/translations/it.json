@@ -3,21 +3,23 @@
     "step": {
       "user": {
         "data": {
-          "host": "Indirizzo IP",
+          "host": "Host (indirizzo IP o nome host)",
           "port": "Porta",
-          "username": "Username",
+          "username": "ID centrale (nome utente)",
           "password": "Password",
-          "scan_interval": "Intervallo scansione"
-        }
+          "scan_interval": "Intervallo lettura zone (secondi)"
+        },
+        "title": "Collega iAlarm MK2",
+        "description": "Inserisci host, porta e credenziali di accesso alla centrale. Gli stati delle zone vengono letti con l’intervallo configurato; gli eventi di allarme arrivano tramite la connessione push."
       },
       "reconfigure": {
         "data": {
-          "host": "Indirizzo IP",
+          "host": "Host (indirizzo IP o nome host)",
           "port": "Porta",
-          "username": "Username",
           "password": "Password",
-          "scan_interval": "Intervallo scansione (sec.)"
-        }
+          "scan_interval": "Intervallo lettura zone (secondi)"
+        },
+        "title": "Riconfigura iAlarm MK2"
       }
     },
     "error": {
@@ -26,14 +28,95 @@
       "unknown": "Errore sconosciuto"
     },
     "abort": {
-      "already_configured": "Dispositivo già configurato"
+      "already_configured": "Dispositivo già configurato",
+      "reconfigured": "Configurazione aggiornata correttamente."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Batterie dei sensori",
-        "description": "Indica la data dell'ultima sostituzione per ciascun sensore. Se non la conosci, seleziona \"Batteria non presente\" per disabilitare la stima della batteria."
+        "description": "Per ogni sensore, indica la data dell’ultima sostituzione e disattiva disable_battery_estimate per abilitare la stima. Lascia disable_battery_estimate attivo se non conosci la data o il sensore non ha batteria. La percentuale è una stima su due anni, non una misura. Una segnalazione di batteria scarica imposta il valore al 5% anche con la stima disabilitata."
+      }
+    },
+    "error": {
+      "future_date": "La data di sostituzione non può essere futura.",
+      "data_invalid": "Inserisci una data di sostituzione valida."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Batteria stimata"
+      },
+      "network_ip": {
+        "name": "IP configurato"
+      },
+      "network_gate": {
+        "name": "Gateway"
+      },
+      "network_dns1": {
+        "name": "DNS primario"
+      },
+      "network_dns2": {
+        "name": "DNS secondario"
+      },
+      "mobile_apn": {
+        "name": "APN mobile"
+      },
+      "system_indelay": {
+        "name": "Ritardo di ingresso"
+      },
+      "system_outdelay": {
+        "name": "Ritardo di uscita"
+      },
+      "system_alarmtime": {
+        "name": "Durata della sirena"
+      },
+      "system_wlloss": {
+        "name": "Impostazione perdita wireless"
+      },
+      "system_acloss": {
+        "name": "Impostazione assenza rete elettrica"
+      },
+      "system_comloss": {
+        "name": "Impostazione perdita comunicazione"
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Connettività push"
+      },
+      "network_dhcp": {
+        "name": "DHCP"
+      },
+      "system_armvoice": {
+        "name": "Messaggi vocali di inserimento"
+      },
+      "system_armreport": {
+        "name": "Segnalazioni di inserimento"
+      },
+      "system_forcearm": {
+        "name": "Inserimento forzato"
+      },
+      "system_doorcheck": {
+        "name": "Controllo apertura zone"
+      },
+      "system_breakcheck": {
+        "name": "Controllo manomissione"
+      },
+      "system_alarmlimit": {
+        "name": "Limite allarmi"
+      }
+    },
+    "switch": {
+      "bypass": {
+        "name": "Esclusione zona"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Riavvia centrale"
       }
     }
   }

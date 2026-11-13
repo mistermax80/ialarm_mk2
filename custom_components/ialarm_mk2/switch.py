@@ -41,7 +41,7 @@ class IAlarmMkZoneBypassSwitch(
     """Control the bypass configuration of an alarm zone."""
 
     _attr_has_entity_name = True
-    _attr_name = "Bypass"
+    _attr_translation_key = "bypass"
     _attr_icon = "mdi:shield-off-outline"
     _attr_entity_category = EntityCategory.CONFIG
 

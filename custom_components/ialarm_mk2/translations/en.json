@@ -3,21 +3,23 @@
     "step": {
       "user": {
         "data": {
-          "host": "Host",
+          "host": "Host (IP address or hostname)",
           "port": "Port",
-          "username": "Username",
+          "username": "Panel ID (username)",
           "password": "Password",
-          "scan_interval": "Scan interval"
-        }
+          "scan_interval": "Zone polling interval (seconds)"
+        },
+        "title": "Connect to iAlarm MK2",
+        "description": "Enter the host, port and credentials used to access your panel. Zone states are polled at the configured interval; alarm events arrive through the push connection."
       },
       "reconfigure": {
         "data": {
-          "host": "Host",
+          "host": "Host (IP address or hostname)",
           "port": "Port",
-          "username": "Username",
           "password": "Password",
-          "scan_interval": "Scan interval (sec.)"
-        }
+          "scan_interval": "Zone polling interval (seconds)"
+        },
+        "title": "Reconfigure iAlarm MK2"
       }
     },
     "error": {
@@ -26,16 +28,96 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "reconfigured": "Configuration updated successfully."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Batterie dei sensori",
-        "description": "Indica la data dell'ultima sostituzione per ciascun sensore. Se non la conosci, seleziona \"Batteria non presente\" per disabilitare la stima della batteria."
+        "title": "Sensor batteries",
+        "description": "For each sensor, enter the last battery replacement date and turn off disable_battery_estimate to enable the estimate. Leave disable_battery_estimate on if the date is unknown or no battery is fitted. The percentage is estimated over two years, not measured. A low-battery report sets the value to 5% even when the estimate is disabled."
+      }
+    },
+    "error": {
+      "future_date": "The replacement date cannot be in the future.",
+      "data_invalid": "Enter a valid replacement date."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Estimated battery"
+      },
+      "network_ip": {
+        "name": "Configured IP"
+      },
+      "network_gate": {
+        "name": "Gateway"
+      },
+      "network_dns1": {
+        "name": "Primary DNS"
+      },
+      "network_dns2": {
+        "name": "Secondary DNS"
+      },
+      "mobile_apn": {
+        "name": "Mobile APN"
+      },
+      "system_indelay": {
+        "name": "Entry delay"
+      },
+      "system_outdelay": {
+        "name": "Exit delay"
+      },
+      "system_alarmtime": {
+        "name": "Siren duration"
+      },
+      "system_wlloss": {
+        "name": "Wireless loss setting"
+      },
+      "system_acloss": {
+        "name": "AC loss setting"
+      },
+      "system_comloss": {
+        "name": "Communication loss setting"
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Push connectivity"
+      },
+      "network_dhcp": {
+        "name": "DHCP"
+      },
+      "system_armvoice": {
+        "name": "Arming voice prompts"
+      },
+      "system_armreport": {
+        "name": "Arming reports"
+      },
+      "system_forcearm": {
+        "name": "Forced arming"
+      },
+      "system_doorcheck": {
+        "name": "Door check"
+      },
+      "system_breakcheck": {
+        "name": "Tamper check"
+      },
+      "system_alarmlimit": {
+        "name": "Alarm limit"
+      }
+    },
+    "switch": {
+      "bypass": {
+        "name": "Bypass"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Reboot control panel"
       }
     }
   }
-
 }
