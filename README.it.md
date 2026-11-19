@@ -16,7 +16,7 @@
 
 Integrazione personalizzata di Home Assistant per centrali Meian / iAlarm MK, basata su una copia interna modificata di `pyialarmmk`.
 
-La versione documentata è **[2.3.0-alpha.8](https://github.com/mistermax80/ialarm_mk2/releases/tag/2.3.0-alpha.8)**, pubblicata come pre-release. I metadati HACS indicano **Home Assistant 2026.9.0** come versione minima.
+La versione dichiarata in questo repository è **2.3.0-alpha.9**. I metadati HACS indicano **Home Assistant 2026.9.0** come versione minima.
 
 ## Funzionalità
 
@@ -58,7 +58,7 @@ Aggiungi questo repository a HACS come repository personalizzato di tipo **Integ
 https://github.com/mistermax80/ialarm_mk2
 ```
 
-Installa l’integrazione e riavvia Home Assistant. Per installare `2.3.0-alpha.8`, abilita le versioni pre-release nella scelta della versione da scaricare in HACS.
+Installa l’integrazione e riavvia Home Assistant. Per installare una pre-release, abilita le versioni pre-release nella scelta della versione da scaricare in HACS.
 
 ### Installazione manuale
 
@@ -85,7 +85,7 @@ I nomi delle entità sono disponibili in italiano e inglese. I nomi personalizza
 
 L’integrazione non registra più l’intera config entry nei log diagnostici e non include token di autenticazione nei messaggi di login, logout e chiusura socket. Nei relativi errori rimangono operazione e tipo di eccezione, senza testo grezzo dell’eccezione. Questo non elimina i log già esistenti e non costituisce una redazione universale dei log prodotti da altro codice.
 
-Sono presenti nove test automatici per errori/backoff push e protezione dei log sensibili. Dalla radice del repository, in un ambiente Python con Home Assistant, `lxml` e `xmltodict`, esegui:
+I 34 test automatici coprono gli esiti dei comandi di allarme, errori/backoff push, protezione dei log sensibili, chiusura dei socket e relazioni tra dispositivi delle zone. Dalla radice del repository, in un ambiente Python con Home Assistant, `lxml` e `xmltodict`, esegui:
 
 ```sh
 python -B -m unittest discover -s custom_components/ialarm_mk2/tests -v

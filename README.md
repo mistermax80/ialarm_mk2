@@ -16,7 +16,7 @@
 
 Custom Home Assistant integration for Meian / iAlarm MK alarm panels, using an internal modified copy of `pyialarmmk`.
 
-The documented version is **[2.3.0-alpha.8](https://github.com/mistermax80/ialarm_mk2/releases/tag/2.3.0-alpha.8)**, published as a pre-release. The HACS metadata declares Home Assistant **2026.9.0** as the minimum version.
+The version declared in this repository is **2.3.0-alpha.9**. The HACS metadata declares Home Assistant **2026.9.0** as the minimum version.
 
 ## Features
 
@@ -58,7 +58,7 @@ Add this repository as a custom **Integration** repository in HACS:
 https://github.com/mistermax80/ialarm_mk2
 ```
 
-Install the integration and restart Home Assistant. To install `2.3.0-alpha.8`, enable pre-release versions when choosing the version to download in HACS.
+Install the integration and restart Home Assistant. To install a pre-release, enable pre-release versions when choosing the version to download in HACS.
 
 ### Manual installation
 
@@ -85,7 +85,7 @@ Entity names are available in English and Italian. Existing user-defined entity 
 
 The integration no longer dumps the full configuration entry into diagnostic logs or includes authentication tokens in login/logout/socket-close messages. Those error logs retain the operation and exception type while omitting raw exception text. This does not remove existing log files or constitute redaction of every possible log emitted by other code.
 
-Nine automated tests cover push failure/backoff and sensitive logging. From the repository root, with Home Assistant, `lxml` and `xmltodict` available in the Python environment, run:
+The 34 automated tests cover alarm command results, push failure/backoff, sensitive logging, socket cleanup and zone device relationships. From the repository root, with Home Assistant, `lxml` and `xmltodict` available in the Python environment, run:
 
 ```sh
 python -B -m unittest discover -s custom_components/ialarm_mk2/tests -v
